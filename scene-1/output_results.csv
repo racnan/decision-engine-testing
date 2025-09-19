@@ -1,0 +1,11 @@
+amount,available_networks,Stripe_outcome,Adyen_outcome,PayPal_outcome,chosen_processor,final_outcome
+878.87,['Visa'],success,fail,success,Stripe,success
+894.98,['Mastercard'],success,fail,fail,Stripe,success
+861.98,['Mastercard'],success,fail,success,Stripe,success
+852.99,['Mastercard'],success,fail,success,Stripe,success
+640.74,['Visa'],success,fail,success,Stripe,success
+392.9,['Mastercard'],success,fail,success,Stripe,success
+761.31,['Mastercard'],success,fail,success,Stripe,success
+734.53,['Mastercard'],success,fail,success,Stripe,success
+170.66,['Visa'],success,fail,success,Stripe,success
+767.92,['Visa'],success,fail,success,PayPal,success
