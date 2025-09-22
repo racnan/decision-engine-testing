@@ -186,7 +186,7 @@ def simulate_and_send_feedback(decision, csv_row, payment_id, payment_method):
         "gateway": chosen_processor,
         # This is a Python ternary operator. It's a compact if-else statement.
         # It sets 'status' to "SUCCESS" if pre_determined_outcome is "success", otherwise "FAILURE".
-        "status": "SUCCESS" if pre_determined_outcome == "success" else "FAILURE",
+        "status": "AUTHORIZED" if pre_determined_outcome == "success" else "FAILURE",
         "paymentId": payment_id,
         "paymentMethodType": payment_method,
         # We simulate a random network latency for the feedback call.
