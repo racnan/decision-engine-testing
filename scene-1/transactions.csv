@@ -1,11 +1,101 @@
-amount,available_networks,Stripe_outcome,Adyen_outcome,PayPal_outcome
-878.87,['Visa'],success,fail,success
-894.98,['Mastercard'],success,fail,fail
-861.98,['Mastercard'],success,fail,success
-852.99,['Mastercard'],success,fail,success
-640.74,['Visa'],success,fail,success
-392.9,['Mastercard'],success,fail,success
-761.31,['Mastercard'],success,fail,success
-734.53,['Mastercard'],success,fail,success
-170.66,['Visa'],success,fail,success
-767.92,['Visa'],success,fail,success
+amount,payment_method_type,payment_method,Stripe_outcome,Adyen_outcome,PayPal_outcome
+753.87,['CARD'],"['Visa', 'Interlink']",success,fail,success
+326.54,['CARD'],['Visa'],success,fail,success
+261.44,['WALLET'],['Venmo'],success,fail,success
+868.8,['CARD'],"['Mastercard', 'Maestro']",success,fail,success
+838.92,['CARD'],['Visa'],success,fail,success
+14.39,['CARD'],['Visa'],success,fail,success
+971.25,['CARD'],['Visa'],success,fail,fail
+747.77,['CARD'],"['Visa', 'Interlink']",success,fail,success
+59.56,['WALLET'],['PayPal'],success,fail,success
+932.4,['CARD'],"['Visa', 'Interlink']",success,fail,fail
+214.14,['CARD'],['Visa'],success,fail,fail
+116.0,['CARD'],['Mastercard'],success,fail,success
+465.11,['CARD'],['Mastercard'],success,fail,success
+224.16,['CARD'],['Visa'],success,fail,success
+218.96,['CARD'],"['Mastercard', 'Maestro']",success,fail,success
+178.01,['CARD'],"['Mastercard', 'Maestro']",success,fail,success
+950.97,['WALLET'],['PayPal'],success,fail,success
+73.97,['CARD'],['Mastercard'],success,fail,success
+612.88,['WALLET'],['PayPal'],success,fail,success
+608.96,['CARD'],['Visa'],success,fail,success
+181.2,['WALLET'],['Venmo'],success,fail,success
+652.94,['WALLET'],['PayPal'],success,fail,success
+352.29,['WALLET'],['PayPal'],success,fail,success
+596.16,['CARD'],['Visa'],success,fail,success
+304.48,['WALLET'],['Venmo'],success,fail,success
+934.17,['CARD'],"['Visa', 'Interlink']",success,fail,success
+185.82,['CARD'],['Mastercard'],success,fail,success
+157.3,['WALLET'],['PayPal'],success,fail,fail
+479.98,['CARD'],"['Visa', 'Interlink']",success,fail,success
+97.97,['WALLET'],['Venmo'],success,fail,success
+818.41,['CARD'],['Mastercard'],success,fail,success
+748.86,['WALLET'],['Venmo'],success,fail,success
+454.14,['CARD'],['Mastercard'],success,fail,success
+801.86,['WALLET'],['PayPal'],success,fail,success
+891.64,['WALLET'],['PayPal'],success,fail,success
+868.68,['CARD'],['Visa'],success,fail,success
+550.06,['CARD'],['Mastercard'],success,fail,success
+37.24,['WALLET'],['Venmo'],success,fail,success
+385.89,['WALLET'],['PayPal'],success,fail,success
+591.25,['CARD'],"['Visa', 'Interlink']",success,fail,success
+764.3,['CARD'],['Visa'],success,fail,success
+942.58,['WALLET'],['Venmo'],success,fail,success
+599.39,['WALLET'],['PayPal'],success,fail,success
+924.66,['WALLET'],['PayPal'],success,fail,success
+541.61,['CARD'],"['Visa', 'Interlink']",success,fail,success
+137.08,['CARD'],['Visa'],success,fail,success
+503.89,['CARD'],['Visa'],success,fail,success
+535.18,['CARD'],['Visa'],success,fail,success
+905.74,['CARD'],['Visa'],success,fail,success
+891.85,['WALLET'],['Venmo'],success,fail,success
+645.49,['CARD'],['Visa'],success,fail,success
+519.24,['WALLET'],['PayPal'],success,fail,fail
+124.23,['CARD'],['Visa'],success,fail,success
+143.65,['CARD'],['Visa'],success,fail,success
+789.08,['CARD'],['Visa'],success,fail,success
+819.28,['WALLET'],['Venmo'],success,fail,success
+341.22,['WALLET'],['PayPal'],success,fail,success
+212.03,['CARD'],['Mastercard'],success,fail,success
+903.1,['CARD'],['Mastercard'],success,fail,success
+755.63,['CARD'],['Visa'],success,fail,success
+42.69,['CARD'],"['Visa', 'Interlink']",success,fail,success
+809.02,['CARD'],"['Visa', 'Interlink']",success,fail,success
+374.85,['WALLET'],['PayPal'],success,fail,success
+65.16,['CARD'],['Visa'],success,fail,success
+10.32,['CARD'],['Visa'],success,fail,success
+762.31,['WALLET'],['PayPal'],success,fail,success
+841.35,['CARD'],"['Visa', 'Interlink']",success,fail,success
+225.84,['CARD'],['Visa'],success,fail,success
+649.19,['CARD'],['Mastercard'],success,fail,success
+649.99,['WALLET'],['PayPal'],success,fail,success
+177.71,['WALLET'],['Venmo'],success,fail,success
+18.19,['CARD'],['Visa'],success,fail,success
+275.16,['WALLET'],['PayPal'],success,fail,success
+711.88,['CARD'],['Mastercard'],success,fail,success
+576.64,['CARD'],['Visa'],success,fail,success
+786.04,['CARD'],"['Visa', 'Interlink']",success,fail,success
+207.02,['WALLET'],['PayPal'],success,fail,success
+971.01,['CARD'],['Visa'],success,fail,success
+362.58,['CARD'],['Visa'],success,fail,success
+521.99,['CARD'],['Visa'],success,fail,success
+574.33,['CARD'],"['Mastercard', 'Maestro']",success,fail,success
+884.32,['WALLET'],['PayPal'],success,fail,success
+219.17,['CARD'],['Mastercard'],success,fail,success
+636.43,['CARD'],['Mastercard'],success,fail,success
+203.72,['CARD'],['Visa'],success,fail,success
+263.65,['WALLET'],['Venmo'],success,fail,success
+497.85,['CARD'],['Visa'],success,fail,success
+543.23,['CARD'],['Visa'],success,fail,success
+507.36,['CARD'],['Visa'],success,fail,success
+423.64,['WALLET'],['PayPal'],success,fail,success
+991.89,['CARD'],['Visa'],success,fail,success
+577.93,['CARD'],['Mastercard'],success,fail,fail
+581.13,['WALLET'],['Venmo'],success,fail,success
+237.08,['WALLET'],['Venmo'],success,fail,success
+559.07,['CARD'],['Mastercard'],success,fail,success
+565.52,['CARD'],['Visa'],success,fail,success
+792.85,['CARD'],['Visa'],success,fail,success
+538.52,['WALLET'],['PayPal'],success,fail,success
+572.32,['WALLET'],['PayPal'],success,fail,success
+549.69,['CARD'],['Visa'],success,fail,success

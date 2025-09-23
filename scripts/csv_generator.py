@@ -53,19 +53,29 @@ def validate_config(config):
 
 def get_csv_headers(config):
     """
-    Generates the list of header names for the output CSV file based on the schema.
+    Dynamically generates the list of header names from the nested schema.
     """
     headers = []
-    # Loop through the fields defined in the schema and add their names to the list.
-    for field in config['schema']['transaction_fields']:
-        headers.append(field['name'])
     
-    # Loop through the processors and add a custom '_outcome' column for each one.
+    def find_headers_recursive(fields):
+        for field in fields:
+            if 'name' in field:
+                headers.append(field['name'])
+            # If it's a conditional generator, look inside its conditions
+            if field.get('generator') == 'conditional_generator':
+                for condition_fields in field.get('conditions', {}).values():
+                    find_headers_recursive(condition_fields)
+
+    find_headers_recursive(config['schema']['transaction_fields'])
+    
+    # Add the processor outcome columns
     for processor in config['processors']:
         headers.append(f"{processor['name']}_outcome")
         
-    print(f"INFO: Generated CSV headers: {headers}")
-    return headers
+    # Use dict.fromkeys to preserve order and remove duplicates
+    unique_headers = list(dict.fromkeys(headers))
+    print(f"INFO: Generated CSV headers: {unique_headers}")
+    return unique_headers
 
 def get_current_processor_state(config, entry_number, processor_name):
     """
@@ -109,57 +119,74 @@ def generate_random_number(params):
 
 def generate_random_choice(params):
     """
-    Generates a value by choosing from lists in params. This is the "smart" generator.
+    Generates a weighted random choice from the provided values or combinations.
     """
     try:
-        # Case 1: The params dictionary contains a simple 'values' list.
-        if 'values' in params:
-            return random.choice(params['values'])
-        
-        # Case 2: The params dictionary contains the structure for card networks.
-        if 'primary_values' in params:
-            # Check if a list of combinations is also provided and not empty.
-            has_combinations = 'combinations' in params and params['combinations']
-            
-            # If combinations exist, give a 50% chance to pick from them.
-            if has_combinations and random.random() < 0.5:
-                # For a dual-network card, we return the entire sub-list.
-                return random.choice(params['combinations'])
-            else:
-                # Otherwise (or if the 50% chance fails), pick a single-network card.
-                # We wrap the choice in a list to be consistent.
-                return [random.choice(params['primary_values'])]
-        
-        # If the params object doesn't match our expected structures, we fail fast.
-        raise ValueError("Invalid parameters for 'random_choice'. Expecting 'values' or at least 'primary_values'.")
+        primary_values = params['primary_values']
+        primary_weights = params['primary_weights']
+        if len(primary_weights) != len(primary_values):
+            raise ValueError("Length of 'primary_weights' must match length of 'primary_values'.")
+
+        if 'combinations' in params:
+            distribution_weights = params['distribution_weights']
+            if len(distribution_weights) != 2:
+                raise ValueError("'distribution_weights' must have exactly two values.")
+
+            pools = ['primary', 'combination']
+            chosen_pool = random.choices(pools, weights=distribution_weights, k=1)[0]
+
+            if chosen_pool == 'primary':
+                chosen = random.choices(primary_values, weights=primary_weights, k=1)[0]
+                return chosen if isinstance(chosen, list) else [chosen]
+            else: # chosen_pool == 'combination'
+                combinations = params['combinations']
+                combination_weights = params['combination_weights']
+                if len(combination_weights) != len(combinations):
+                    raise ValueError("Length of 'combination_weights' must match 'combinations'.")
+                return random.choices(combinations, weights=combination_weights, k=1)[0]
+        else:
+            chosen = random.choices(primary_values, weights=primary_weights, k=1)[0]
+            return chosen if isinstance(chosen, list) else [chosen]
+
     except KeyError as e:
-        # We catch the default KeyError and re-raise it with a more helpful message.
-        raise KeyError(f"Missing required parameter in 'random_choice' params: {e}")
+        raise KeyError(f"A required parameter (e.g., 'primary_values' or a weight) is missing: {e}")
 
 def generate_transaction_data(config):
     """
-    Acts as a dispatcher, calling the correct generator for each transaction field.
+    Acts as an orchestrator, calling the correct generator for each transaction field,
+    handling conditional logic.
     """
     transaction_data = {}
-    fields_to_generate = config['schema']['transaction_fields']
+    
+    def process_fields(fields):
+        for field_config in fields:
+            generator_type = field_config.get('generator')
 
-    for field_config in fields_to_generate:
-        field_name = field_config['name']
-        generator_type = field_config['generator']
-        params = field_config['params']
-        
-        value = None
-        # Based on the 'generator' string from the config, we call the appropriate function.
-        if generator_type == "random_number":
-            value = generate_random_number(params)
-        elif generator_type == "random_choice":
-            value = generate_random_choice(params)
-        else:
-            # If we find a generator type in the config that we haven't implemented, we fail fast.
-            raise ValueError(f"Unknown generator type '{generator_type}' for field '{field_name}'.")
-        
-        transaction_data[field_name] = value
-        
+            if generator_type == 'conditional_generator':
+                conditional_field_name = field_config['on_field']
+                conditional_value = transaction_data.get(conditional_field_name)
+                
+                if conditional_value and isinstance(conditional_value, list):
+                    conditional_value = conditional_value[0]
+
+                if conditional_value in field_config['conditions']:
+                    process_fields(field_config['conditions'][conditional_value])
+
+            elif generator_type:
+                field_name = field_config['name']
+                params = field_config.get('params', {})
+                
+                value = None
+                if generator_type == "random_number":
+                    value = generate_random_number(params)
+                elif generator_type == "random_choice":
+                    value = generate_random_choice(params)
+                else:
+                    raise ValueError(f"Unknown generator type '{generator_type}' for field '{field_name}'.")
+                
+                transaction_data[field_name] = value
+
+    process_fields(config['schema']['transaction_fields'])
     return transaction_data
 
 def main():
