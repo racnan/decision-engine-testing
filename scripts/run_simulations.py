@@ -7,6 +7,7 @@ import requests  # For making HTTP requests to web services (APIs).
 import yaml  # For reading and parsing YAML files.
 import random  # For generating random numbers.
 import time  # For pausing the script.
+import ast  # For safely parsing string literals from CSV.
 
 # --- Configuration ---
 # These are global constants. They are variables whose values are set once and
@@ -84,28 +85,18 @@ def get_card_isin(networks_list):
 
 def prepare_api_payload(csv_row, line_number, config):
     """
-    Prepares the JSON payload (as a Python dictionary) for the decision engine API call.
-    'csv_row' is a dictionary representing one line from the input CSV file.
+    Prepares the JSON payload for the decision engine API call,
+    handling different payload structures based on payment_method_type.
     """
-    # The 'available_networks' from the CSV is a string like "['Visa']".
-    # The 'eval()' function executes this string as Python code, turning it into a real list.
-    # Note: eval() can be risky if the data isn't trusted, but here we trust our own generated CSV.
-    available_networks = eval(csv_row['available_networks'])
-    # We call our helper function to get the correct cardIsin for the networks.
-    card_isin = get_card_isin(available_networks)
-
-    # --- DYNAMIC FIELD 1: eligibleGatewayList ---
-    # We create a list of all processor names from the configuration file.
-    # This uses a list comprehension, a concise way to create lists in Python.
+    # Read the new, common columns from the CSV using the safer ast.literal_eval
+    payment_method_type = ast.literal_eval(csv_row['payment_method_type'])[0]
+    payment_method_list = ast.literal_eval(csv_row['payment_method'])
+    
+    # Get the list of all eligible gateways from the config
     eligible_gateways = [p['name'] for p in config['processors']]
 
-    # --- DYNAMIC FIELD 2: paymentMethod ---
-    # The instruction is to send one network, even for dual-network cards.
-    # We'll just pick the first one from the list of available networks.
-    payment_method = available_networks[0].upper()
-    
-    # This is the main payload dictionary. It's structured exactly as the API expects.
-    # Values have been updated based on the user's request.
+    # --- Base Payload --- 
+    # This part is common to all payment types
     payload = {
         "merchantId": "m3",
         "eligibleGatewayList": eligible_gateways, # Dynamically populated
@@ -124,16 +115,35 @@ def prepare_api_payload(csv_row, line_number, config):
             "isEmi": False,
             "emiBank": None,
             "emiTenure": None,
-            "paymentMethodType": "CARD",
-            "paymentMethod": payment_method, # Dynamically populated
             "paymentSource": None,
             "authType": None,
+        }
+    }
+
+    # --- Conditional, Type-Specific Payload ---
+    if payment_method_type == "CARD":
+        card_isin = get_card_isin(payment_method_list)
+        
+        payload['paymentInfo'].update({
+            "paymentMethodType": "CARD",
+            "paymentMethod": payment_method_list[0].upper(), # Dynamically populated
             "cardIssuerBankName": None,
             "cardIsin": card_isin, # The ISIN we looked up earlier.
             "cardType": "DEBIT",
             "cardSwitchProvider": None
-        }
-    }
+        })
+
+    elif payment_method_type == "WALLET":
+        wallet_provider = payment_method_list[0]
+        
+        payload['paymentInfo'].update({
+            "paymentMethodType": "WALLET",
+            "paymentMethod": wallet_provider.upper(), # Dynamically populated
+        })
+        
+    else:
+        raise ValueError(f"Unknown payment_method_type '{payment_method_type}' in CSV.")
+
     return payload
 
 def simulate_and_send_feedback(decision, csv_row, payment_id, payment_method):
@@ -188,6 +198,8 @@ def simulate_and_send_feedback(decision, csv_row, payment_id, payment_method):
         # It sets 'status' to "SUCCESS" if pre_determined_outcome is "success", otherwise "FAILURE".
         "status": "AUTHORIZED" if pre_determined_outcome == "success" else "FAILURE",
         "paymentId": payment_id,
+        # TODO: The feedback API currently expects the specific method (e.g., "VISA")
+        # in the 'paymentMethodType' field, not the general type (e.g., "CARD").
         "paymentMethodType": payment_method,
         # We simulate a random network latency for the feedback call.
         "txnLatency": { "gatewayLatency": random.randint(150, 6000) }

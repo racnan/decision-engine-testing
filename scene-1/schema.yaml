@@ -8,52 +8,57 @@
 
 # Global settings for this simulation run.
 simulation:
-  # The total number of transaction entries to generate.
-  num_transactions: 10
-  # The file path where the generated transaction data will be saved.
+  num_transactions: 100
   output_csv_path: "./scene-1/transactions.csv"
 
 # Defines the data model for the entire simulation.
 schema:
-  # Defines the columns to be generated for each transaction.
   transaction_fields:
-    - # A field named "amount".
-      name: "amount"
-      # To be generated using the "random_number" method.
+    - name: "amount"
       generator: "random_number"
-      # Parameters for the number generator.
       params:
         min: 5
         max: 1000
         decimals: 2
-    - # A field named "available_networks".
-      name: "available_networks"
-      # To be generated using our enhanced "random_choice" method.
+
+    - name: "payment_method_type"
       generator: "random_choice"
-      # Parameters for the choice generator.
       params:
-        # A list of choices for single-network cards.
-        primary_values:
-          - "Visa"
-          - "Mastercard"
+        primary_values: ["CARD", "WALLET"]
+        primary_weights: [8.0, 2.0] # 90% CARD, 10% WALLET
+
+    - generator: "conditional_generator"
+      on_field: "payment_method_type"
+      conditions:
+        "CARD":
+          - name: "payment_method"
+            generator: "random_choice"
+            params:
+              primary_values: ["Visa", "Mastercard"]
+              primary_weights: [0.7, 0.3]
+
+              # The combination logic is defined but commented out for this scenario.
+              combinations: [["Visa", "Interlink"], ["Mastercard", "Maestro"]]
+              combination_weights: [0.9, 0.1]
+              distribution_weights: [0.8, 0.2]
+
+        "WALLET":
+          - name: "payment_method"
+            generator: "random_choice"
+            params:
+              primary_values: ["PayPal", "Venmo"]
+              primary_weights: [0.6, 0.4]
 
 # The list of processors and their default states, which defines our scenario.
 processors:
-  # The first processor is "Stripe".
   - name: "Stripe"
-    # Its default state is:
     defaults:
-      # It has a high success rate.
       success_rate: 0.98
-  # The second processor is "Adyen".
   - name: "Adyen"
     defaults:
-      # A lower success rate.
       success_rate: 0.0
-  # The third processor is "PayPal".
   - name: "PayPal"
     defaults:
-      # The lowest success rate.
       success_rate: 0.94
 
 # This is empty because the default state already matches the scenario we want to test.
