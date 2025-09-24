@@ -34,9 +34,10 @@ REQUESTS_PER_SECOND = 10
 CARD_ISIN_MAP = {
     ('VISA',): '414141',
     ('MASTERCARD',): '414141',
-    ('VISA','ACCEL','STAR'): '440000',
-    ('MASTERCARD', 'ACCEL','STAR'): '500251',
-    ('DISCOVER', 'PULSE','NYCE'): '644564',
+    # Keys MUST be sorted alphabetically to match the logic in get_card_isin()
+    ('ACCEL', 'STAR', 'VISA'): '440000',
+    ('ACCEL', 'MASTERCARD', 'STAR'): '500251',
+    ('DISCOVER', 'NYCE', 'PULSE'): '644564',
 }
 
 # 'def' is how you define a function in Python.
