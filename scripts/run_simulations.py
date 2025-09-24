@@ -158,7 +158,7 @@ def send_feedback(processor, outcome, payment_id, network):
         "gateway": processor,
         "status": "AUTHORIZED" if outcome == "success" else "FAILURE",
         "paymentId": payment_id,
-        "paymentMethodType": network.upper(),
+        "paymentMethod": network.upper(),
         "txnLatency": {"gatewayLatency": random.randint(150, 6000)}
     }
     try:
