@@ -32,10 +32,11 @@ REQUESTS_PER_SECOND = 10
 # dictionary keys must be unchangeable. We sort the networks before lookup to
 # ensure ('Interlink', 'Visa') and ('Visa', 'Interlink') match the same key.
 CARD_ISIN_MAP = {
-    ('Visa',): '500251',
-    ('Mastercard',): '600123',
-    ('Interlink', 'Visa'): '500252',
-    ('Maestro', 'Mastercard'): '600124',
+    ('VISA',): '414141',
+    ('MASTERCARD',): '414141',
+    ('VISA','ACCEL','STAR'): '440000',
+    ('MASTERCARD', 'ACCEL','STAR'): '500251',
+    ('DISCOVER', 'PULSE','NYCE'): '644564',
 }
 
 # 'def' is how you define a function in Python.
@@ -146,80 +147,108 @@ def prepare_api_payload(csv_row, line_number, config):
 
     return payload
 
-def simulate_and_send_feedback(decision, csv_row, payment_id, payment_method):
-    """
-    Simulates a transaction using only the TOP gateway from the engine's decision,
-    sends feedback for that single attempt, and determines the final outcome.
-    'decision' is the JSON response we got from the decision engine.
-    """
-    # This 'try...except' block handles cases where the decision engine gives us
-    # a response that doesn't have the structure we expect.
-    try:
-        # We access the nested data from the decision response dictionary.
-        # This is like navigating a JSON object: decision -> super_router -> priority_map
-        priority_map = decision['super_router']['priority_map']
-        # If the list of gateways is empty, we can't proceed.
-        if not priority_map:
-            print(f"WARNING: Decision engine returned an empty priority map.")
-            return None, "fail" # We return two values: the chosen processor (None) and the outcome.
-        
-        # We get the first item from the priority list (index 0) and then get its 'gateway' value.
-        first_gateway_name = priority_map[0]['gateway']
+def send_feedback(processor, outcome, payment_id, network):
+    """Sends feedback for a single, simulated transaction attempt."""
+    if not processor or not network:
+        return
 
-    except (KeyError, TypeError, IndexError):
-        # This will catch several types of errors:
-        # - KeyError: A dictionary key (like 'super_router_output') doesn't exist.
-        # - TypeError: We tried to index something that isn't a list (e.g., priority_map is None).
-        # - IndexError: The priority_map list was empty, so accessing index 0 failed.
-        print(f"ERROR: Could not parse first gateway from decision engine response: {decision}")
-        return None, "fail"
-
-    # This is the name of the processor the engine chose for us.
-    chosen_processor = first_gateway_name
-    
-    # We construct the name of the column in our CSV that holds the pre-determined outcome
-    # for this specific processor (e.g., "Stripe_outcome").
-    outcome_column = f"{chosen_processor}_outcome"
-    # We check if this column exists in our CSV row data.
-    if outcome_column in csv_row:
-        # If it exists, we use its value ('success' or 'fail').
-        pre_determined_outcome = csv_row[outcome_column]
-    else:
-        # If not, we print a warning and assume it failed. This might happen if the
-        # decision engine suggests a gateway we didn't define in our scenario.
-        print(f"WARNING: Outcome for gateway '{chosen_processor}' not found in CSV row. Assuming fail.")
-        pre_determined_outcome = "fail"
-
-    # Now, we build the payload for the feedback API call.
     feedback_payload = {
         "merchantId": "m3",
-        "gateway": chosen_processor,
-        # This is a Python ternary operator. It's a compact if-else statement.
-        # It sets 'status' to "SUCCESS" if pre_determined_outcome is "success", otherwise "FAILURE".
-        "status": "AUTHORIZED" if pre_determined_outcome == "success" else "FAILURE",
+        "gateway": processor,
+        "status": "AUTHORIZED" if outcome == "success" else "FAILURE",
         "paymentId": payment_id,
-        # TODO: The feedback API currently expects the specific method (e.g., "VISA")
-        # in the 'paymentMethodType' field, not the general type (e.g., "CARD").
-        "paymentMethodType": payment_method,
-        # We simulate a random network latency for the feedback call.
-        "txnLatency": { "gatewayLatency": random.randint(150, 6000) }
+        "paymentMethodType": network.upper(),
+        "txnLatency": {"gatewayLatency": random.randint(150, 6000)}
     }
-
-    # We send the feedback to the feedback API.
     try:
-        print(f"  -> Simulating with TOP choice '{chosen_processor}', outcome: '{pre_determined_outcome}'. Sending feedback.")
-        # requests.post() sends an HTTP POST request. We send our payload as JSON
-        # and set a timeout to prevent the script from hanging indefinitely.
+        print(f"  -> Sending feedback for '{processor}' on network '{network}', outcome: '{outcome}'.")
         requests.post(FEEDBACK_API_URL, json=feedback_payload, timeout=2)
     except requests.exceptions.RequestException as e:
-        # This catches any network-related errors during the API call.
-        print(f"ERROR: Feedback API call failed for gateway {chosen_processor}: {e}")
+        print(f"ERROR: Feedback API call failed for gateway {processor}: {e}")
 
-    # The final outcome of the transaction is simply the pre-determined one.
-    final_outcome = "success" if pre_determined_outcome == "success" else "fail"
+def analyze_decision_and_run_simulation(decision, csv_row, payment_id, config):
+    """
+    Analyzes the decision engine's response to find the best possible and the chosen
+    options, simulates the chosen option, and sends feedback.
+    """
+    results = {
+        "chosen_processor": None, "chosen_network": None, "final_outcome": "fail", "savings": 0.0,
+        "best_possible_processor": None, "best_possible_network": None, "best_possible_savings": 0.0
+    }
     
-    # This function returns two values to the main loop.
-    return chosen_processor, final_outcome
+    try:
+        priority_map = decision['super_router']['priority_map']
+        payment_networks_available = ast.literal_eval(csv_row['payment_method'])
+    except (KeyError, TypeError, IndexError, SyntaxError):
+        print(f"ERROR: Could not parse decision response or CSV data: {decision}")
+        return results
+
+    # Helper to check if a processor in the config supports a given network
+    def is_network_supported(processor_name, network):
+        for p in config['processors']:
+            if p['name'] == processor_name:
+                # Look for supported_networks in the processor's defaults
+                return network in p.get('defaults', {}).get('supported_networks', [])
+        return False
+
+    # --- Two-Pass Analysis ---
+    
+    # Pass 1: Find all valid and successful options to determine the "best possible"
+    valid_successful_options = []
+    for option in priority_map:
+        gateway = option.get('gateway')
+        network = option.get('payment_method') # CORRECTED KEY
+        if not gateway or not network: continue
+
+        is_valid = (network in payment_networks_available and is_network_supported(gateway, network))
+        if not is_valid: continue
+        
+        if csv_row.get(f"{gateway}_outcome") == 'success':
+            valid_successful_options.append(option)
+
+    # Determine best possible option (highest savings, respecting priority for ties)
+    if valid_successful_options:
+        max_savings = max(opt['saving'] for opt in valid_successful_options) # CORRECTED KEY
+        best_options = [opt for opt in valid_successful_options if opt['saving'] == max_savings]
+        # Tie-break by choosing the one that appeared earliest in the original priority_map
+        best_option = min(best_options, key=lambda opt: priority_map.index(opt))
+        
+        results['best_possible_processor'] = best_option.get('gateway')
+        results['best_possible_network'] = best_option.get('payment_method') # CORRECTED KEY
+        results['best_possible_savings'] = best_option.get('saving', 0.0) # CORRECTED KEY
+
+    # Pass 2: Find the first valid option to be the "chosen" one for simulation
+    chosen_option = None
+    for option in priority_map:
+        gateway = option.get('gateway')
+        network = option.get('payment_method') # CORRECTED KEY
+        if not gateway or not network: continue
+
+        if network in payment_networks_available and is_network_supported(gateway, network):
+            chosen_option = option
+            break # Found the first valid one
+
+    if not chosen_option:
+        print("WARNING: No valid processor/network combination found in decision response.")
+        return results
+
+    # Simulate the chosen option
+    chosen_gateway = chosen_option.get('gateway')
+    chosen_network = chosen_option.get('payment_method') # CORRECTED KEY
+    pre_determined_outcome = csv_row.get(f"{chosen_gateway}_outcome", "fail")
+
+    results.update({
+        "chosen_processor": chosen_gateway,
+        "chosen_network": chosen_network,
+        "final_outcome": pre_determined_outcome,
+        "savings": chosen_option.get('saving', 0.0) # CORRECTED KEY
+    })
+
+    # Send feedback for the simulated attempt
+    send_feedback(chosen_gateway, pre_determined_outcome, payment_id, chosen_network)
+
+    return results
+
 
 def main():
     """
@@ -256,12 +285,12 @@ def main():
             # where the keys are the header names. This is very convenient.
             reader = csv.DictReader(infile)
             
-            # We define the headers for our output file. It will be all the original
-            # headers plus two new ones for our simulation results.
-            output_headers = reader.fieldnames + ['chosen_processor', 'final_outcome']
-            # csv.DictWriter will write dictionaries to the CSV file.
+            # Define the headers for our output file, including all new analysis columns.
+            output_headers = reader.fieldnames + [
+                'chosen_processor', 'chosen_network', 'final_outcome', 'savings',
+                'best_possible_processor', 'best_possible_network', 'best_possible_savings'
+            ]
             writer = csv.DictWriter(outfile, fieldnames=output_headers)
-            # Write the header row first.
             writer.writeheader()
 
             print(f"INFO: Writing simulation results to: {output_csv_path}")
@@ -269,45 +298,42 @@ def main():
 
             # This is the main loop. It will iterate over every row in the input CSV.
             for row in reader:
-                # This prints a progress message every 500 transactions.
-                # The '%' is the modulo operator (it gives the remainder of a division).
                 if reader.line_num % 500 == 0:
                     print(f"  ...processing transaction {reader.line_num}")
 
-
-                # We set default values for our results. If anything goes wrong in the
-                # 'try' block below, these are the values that will be written to the CSV.
-                chosen_processor, final_outcome = (None, 'fail')
+                # We set default values for our results.
+                simulation_results = {}
                 try:
-                    # Step 1: Prepare the payload for the API call, now passing the config object.
+                    # Step 1: Prepare the payload for the API call.
                     api_payload = prepare_api_payload(row, reader.line_num, config)
-                    if reader.line_num == 2:
-                        print(f"rachit payload {api_payload}")
-                    payment_method_used = api_payload['paymentInfo']['paymentMethod']
 
                     # Step 2: Call the decision engine API.
                     response = requests.post(DECISION_ENGINE_URL, json=api_payload, timeout=5)
-                    # This line will automatically raise an error if the API returns a
-                    # bad status code (like 404 Not Found or 500 Internal Server Error).
                     response.raise_for_status()
-                    # .json() parses the JSON response from the API into a Python dictionary.
                     decision = response.json()
 
-                    # Step 3: Simulate the transaction with the engine's decision and send feedback.
+                    # DEBUG: Print the request and response for the first two transactions.
+                    if reader.line_num in [2, 3]: # The first data row is line 2
+                        print("\n--- DEBUG: REQUEST/RESPONSE --- ")
+                        print(f"Transaction #{reader.line_num - 1}")
+                        print("REQUEST to /decide-gateway:")
+                        print(api_payload)
+                        print("RESPONSE from /decide-gateway:")
+                        print(decision)
+                        print("--- END DEBUG ---\n")
+
+                    # Step 3: Analyze the decision, simulate the transaction, and send feedback.
                     payment_id = api_payload['paymentInfo']['paymentId']
-                    chosen_processor, final_outcome = simulate_and_send_feedback(decision, row, payment_id, payment_method_used)
+                    simulation_results = analyze_decision_and_run_simulation(decision, row, payment_id, config)
 
                 except requests.exceptions.RequestException as e:
-                    # This catches errors from the main API call (e.g., network error, timeout).
                     print(f"ERROR: API call failed for row {reader.line_num}: {e}")
                 
                 except (ValueError, SyntaxError) as e:
-                    # This catches errors from prepare_api_payload (e.g., bad data in the CSV).
                     print(f"ERROR: Could not process data or prepare payload for row {reader.line_num}: {e}")
                 
                 # Step 4: Add the simulation results to the original row data.
-                row['chosen_processor'] = chosen_processor
-                row['final_outcome'] = final_outcome
+                row.update(simulation_results)
 
                 # Step 5: Write the complete, enriched row to the output CSV file.
                 writer.writerow(row)

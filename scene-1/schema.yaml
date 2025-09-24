@@ -8,7 +8,7 @@
 
 # Global settings for this simulation run.
 simulation:
-  num_transactions: 100
+  num_transactions: 2
   output_csv_path: "./scene-1/transactions.csv"
 
 # Defines the data model for the entire simulation.
@@ -25,7 +25,7 @@ schema:
       generator: "random_choice"
       params:
         primary_values: ["CARD", "WALLET"]
-        primary_weights: [8.0, 2.0] # 90% CARD, 10% WALLET
+        primary_weights: [1.0, 0.0] # 90% CARD, 10% WALLET
 
     - generator: "conditional_generator"
       on_field: "payment_method_type"
@@ -34,32 +34,35 @@ schema:
           - name: "payment_method"
             generator: "random_choice"
             params:
-              primary_values: ["Visa", "Mastercard"]
+              primary_values: ["VISA", "MASTERCARD"]
               primary_weights: [0.7, 0.3]
 
               # The combination logic is defined but commented out for this scenario.
-              combinations: [["Visa", "Interlink"], ["Mastercard", "Maestro"]]
-              combination_weights: [0.9, 0.1]
+              combinations: [["VISA", "ACCEL","STAR"], ["MASTERCARD", "ACCEL","STAR"]]
+              combination_weights: [0.5, 0.5]
               distribution_weights: [0.8, 0.2]
 
-        "WALLET":
-          - name: "payment_method"
-            generator: "random_choice"
-            params:
-              primary_values: ["PayPal", "Venmo"]
-              primary_weights: [0.6, 0.4]
+        # "WALLET":
+        #   - name: "payment_method"
+        #     generator: "random_choice"
+        #     params:
+        #       primary_values: ["PayPal", "Venmo"]
+        #       primary_weights: [0.6, 0.4]
 
 # The list of processors and their default states, which defines our scenario.
 processors:
   - name: "Stripe"
     defaults:
       success_rate: 0.98
+      supported_networks: ["VISA", "MASTERCARD"]
   - name: "Adyen"
     defaults:
-      success_rate: 0.0
+      success_rate: 0.80
+      supported_networks: ["VISA", "MASTERCARD"]
   - name: "PayPal"
     defaults:
       success_rate: 0.94
+      supported_networks: []
 
 # This is empty because the default state already matches the scenario we want to test.
 event_schedule: []
