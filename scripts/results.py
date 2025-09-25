@@ -19,12 +19,18 @@ def analyze_results():
     total_transactions = 0
     successful_transactions = 0
     
-    total_achieved_savings = 0.0
-    total_best_possible_savings = 0.0
     optimal_choices = 0
 
+    # Detailed savings metrics
+    achieved_savings_success = 0.0
+    best_possible_savings_success = 0.0
+    best_possible_savings_fail = 0.0
+
     # Use defaultdict to simplify initialization
-    processor_stats = defaultdict(lambda: {'total': 0, 'success': 0, 'fail': 0})
+    processor_stats = defaultdict(lambda: {
+        'total': 0, 'success': 0, 'fail': 0,
+        'networks': defaultdict(lambda: {'total': 0, 'success': 0, 'fail': 0})
+    })
     network_stats = defaultdict(lambda: {'total': 0, 'success': 0, 'fail': 0})
 
     print(f"INFO: Analyzing results from {results_path}...")
@@ -42,14 +48,24 @@ def analyze_results():
                 
                 # --- Processor & Network Analysis ---
                 chosen_processor = row.get('chosen_processor')
-                if chosen_processor and chosen_processor != 'None':
-                    processor_stats[chosen_processor]['total'] += 1
-                    if is_success:
-                        processor_stats[chosen_processor]['success'] += 1
-                    else:
-                        processor_stats[chosen_processor]['fail'] += 1
-
                 chosen_network = row.get('chosen_network')
+
+                if chosen_processor and chosen_processor != 'None':
+                    stats = processor_stats[chosen_processor]
+                    stats['total'] += 1
+                    if is_success:
+                        stats['success'] += 1
+                    else:
+                        stats['fail'] += 1
+
+                    if chosen_network and chosen_network != 'None':
+                        network_stats_ptr = stats['networks'][chosen_network]
+                        network_stats_ptr['total'] += 1
+                        if is_success:
+                            network_stats_ptr['success'] += 1
+                        else:
+                            network_stats_ptr['fail'] += 1
+                
                 if chosen_network and chosen_network != 'None':
                     network_stats[chosen_network]['total'] += 1
                     if is_success:
@@ -59,11 +75,13 @@ def analyze_results():
 
                 # --- Savings & Optimization Analysis ---
                 try:
-                    # Only count savings if the transaction was actually successful.
+                    best_possible = float(row.get('best_possible_savings', 0.0))
                     if is_success:
-                        total_achieved_savings += float(row.get('savings', 0.0))
-                    
-                    total_best_possible_savings += float(row.get('best_possible_savings', 0.0))
+                        achieved_savings_success += float(row.get('savings', 0.0))
+                        best_possible_savings_success += best_possible
+                    else:
+                        # For failed transactions, the opportunity cost is the best possible savings.
+                        best_possible_savings_fail += best_possible
                 except (ValueError, TypeError):
                     pass # Ignore rows with invalid savings data
 
@@ -97,23 +115,27 @@ def analyze_results():
     print(f"    # The percentage of successful transactions out of the total.")
     print(f"  - Overall Success Rate:         {overall_success_rate:.2f}%")
 
-    # --- Processor Choice Distribution ---
-    print("\nProcessor Choice Distribution:")
-    print("    # Breaks down how many times each processor was chosen and its performance.")
+    # --- Connector-Network Distribution ---
+    print("\nConnector-Network Distribution:")
+    print("    # Breaks down processor usage and the networks chosen for each.")
     if not processor_stats:
         print("  - No processors were chosen during the simulation.")
     else:
         sorted_processors = sorted(processor_stats.items(), key=lambda item: item[1]['total'], reverse=True)
         total_choices = sum(p['total'] for p in processor_stats.values())
-        
+
         for processor, stats in sorted_processors:
             percentage = (stats['total'] / total_choices) * 100 if total_choices > 0 else 0
-            print(f"    # The number and percentage of times this processor was selected.")
-            print(f"  - {processor:<10}: {stats['total']} times ({percentage:.2f}%)")
-            print(f"      # How many of the selections resulted in a success.")
-            print(f"    - Success: {stats['success']}")
-            print(f"      # How many of the selections resulted in a failure.")
-            print(f"    - Fail:    {stats['fail']}")
+            print(f"\n  - {processor:<10}: {stats['total']} times ({percentage:.2f}%)")
+            print(f"    - Success: {stats['success']}, Fail: {stats['fail']}")
+
+            if stats['networks']:
+                print("    - Network Distribution:")
+                sorted_networks = sorted(stats['networks'].items(), key=lambda item: item[1]['total'], reverse=True)
+                for network, net_stats in sorted_networks:
+                    net_percentage = (net_stats['total'] / stats['total']) * 100 if stats['total'] > 0 else 0
+                    print(f"      - {network:<10}: {net_stats['total']} times ({net_percentage:.2f}%)")
+                    print(f"        - Success: {net_stats['success']}, Fail: {net_stats['fail']}")
 
     # --- Network Choice Distribution ---
     print("\nNetwork Choice Distribution:")
@@ -136,12 +158,25 @@ def analyze_results():
     # --- Savings & Optimization Analysis ---
     print("\nSavings and Optimization Analysis:")
     print("    # Evaluates the performance of the routing logic against a perfect outcome.")
-    missed_savings = total_best_possible_savings - total_achieved_savings
     
-    print(f"    # Count of transactions where the engine's choice matched the best possible successful option.")
-    print(f"  - Transactions with Best Option Selected:   {optimal_choices}")
-    print(f"    # The total monetary value of savings that were not realized by not choosing the best option.")
-    print(f"  - Total Potential Savings Missed:         ${missed_savings:,.2f}")
+    print(f"\n  - Transactions with Best Option Selected: {optimal_choices}")
+
+    # --- Analysis for Successful Transactions ---
+    print("\n  --- Analysis for Successful Transactions ---")
+    missed_savings_success = best_possible_savings_success - achieved_savings_success
+    print(f"    - Total Savings Achieved:           ${achieved_savings_success:,.2f}")
+    print(f"    - Best Possible Savings:            ${best_possible_savings_success:,.2f}")
+    print(f"    - Savings Missed:                   ${missed_savings_success:,.2f}")
+
+    # --- Analysis for Failed Transactions ---
+    print("\n  --- Analysis for Failed Transactions ---")
+    print(f"    - Savings Missed (Opp. Cost):      ${best_possible_savings_fail:,.2f}")
+    print(f"      # This is the total savings that could have been realized if these transactions had succeeded via their optimal route.")
+            
+    # --- Overall Summary ---
+    total_missed_savings = missed_savings_success + best_possible_savings_fail
+    print("\n  --- Overall Summary ---")
+    print(f"    - Total Potential Savings Missed (for Successful and Failed transactions):     ${total_missed_savings:,.2f}")
             
     print("\n--- End of Report ---")
 
