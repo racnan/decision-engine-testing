@@ -1,3 +1,3 @@
-amount,payment_method_type,payment_method,Stripe_outcome,Adyen_outcome,PayPal_outcome,chosen_processor,chosen_network,final_outcome,savings,best_possible_processor,best_possible_network,best_possible_savings
-961.6,['CARD'],['VISA'],success,fail,success,Stripe,VISA,success,0.0,Stripe,VISA,0.0
-111.26,['CARD'],['VISA'],success,fail,success,Stripe,VISA,success,0.0,Stripe,VISA,0.0
+amount,payment_method_type,payment_method,Stripe_outcome,Adyen_outcome,chosen_processor,chosen_network,final_outcome,savings,best_possible_processor,best_possible_network,best_possible_savings
+221.28,['CARD'],"['MASTERCARD', 'ACCEL', 'STAR']",success,fail,Adyen,MASTERCARD,fail,2.927380000000003,Stripe,MASTERCARD,2.927380000000003
+48.19,['CARD'],"['MASTERCARD', 'ACCEL', 'STAR']",success,fail,Stripe,MASTERCARD,success,3.6197400000000037,Stripe,MASTERCARD,3.6197400000000037

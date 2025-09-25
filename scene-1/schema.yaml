@@ -25,7 +25,7 @@ schema:
       generator: "random_choice"
       params:
         primary_values: ["CARD", "WALLET"]
-        primary_weights: [1.0, 0.0] # 90% CARD, 10% WALLET
+        primary_weights: [1.0, 0.0] 
 
     - generator: "conditional_generator"
       on_field: "payment_method_type"
@@ -35,12 +35,12 @@ schema:
             generator: "random_choice"
             params:
               primary_values: ["VISA", "MASTERCARD"]
-              primary_weights: [0.7, 0.3]
+              primary_weights: [0.5, 0.5]
 
               # The combination logic is defined but commented out for this scenario.
               combinations: [["VISA", "ACCEL","STAR"], ["MASTERCARD", "ACCEL","STAR"]]
-              combination_weights: [0.5, 0.5]
-              distribution_weights: [0.8, 0.2]
+              combination_weights: [0.0, 1.0]
+              distribution_weights: [0.0, 1.0]
 
         # "WALLET":
         #   - name: "payment_method"
@@ -53,16 +53,16 @@ schema:
 processors:
   - name: "Stripe"
     defaults:
-      success_rate: 0.98
+      success_rate: 1.0
       supported_networks: ["VISA", "MASTERCARD"]
   - name: "Adyen"
     defaults:
-      success_rate: 0.80
+      success_rate: 0.00
       supported_networks: ["VISA", "MASTERCARD"]
-  - name: "PayPal"
-    defaults:
-      success_rate: 0.94
-      supported_networks: []
+  # - name: "PayPal"
+  #   defaults:
+  #     success_rate: 0.94
+  #     supported_networks: []
 
 # This is empty because the default state already matches the scenario we want to test.
 event_schedule: []
