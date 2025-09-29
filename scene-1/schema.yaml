@@ -57,7 +57,7 @@ processors:
       supported_networks: ["VISA", "MASTERCARD"]
   - name: "Adyen"
     defaults:
-      success_rate: 0.92
+      success_rate: 0.90
       supported_networks: ["VISA", "MASTERCARD","ACCEL","STAR"]
   # - name: "PayPal"
   #   defaults:
