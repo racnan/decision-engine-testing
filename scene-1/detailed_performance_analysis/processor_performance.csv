@@ -1,0 +1,3 @@
+Processor,Selections,Percentage,Success,Failure,Success_Rate
+Stripe,1819,72.76%,1779,40,97.80%
+Adyen,681,27.24%,650,31,95.45%

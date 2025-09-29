@@ -1,0 +1,5 @@
+Metric,Value,Percentage,Success_Rate
+Total Transactions,2500,100.00%,97.16%
+Successful Transactions,2429,97.16%,100.00%
+Failed Transactions,71,2.84%,0.00%
+Best Option Selected,1526,61.04%,100.00%

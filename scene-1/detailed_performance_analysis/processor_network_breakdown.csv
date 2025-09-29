@@ -1,0 +1,7 @@
+Processor,Network,Selections,Percentage_of_Processor,Success,Failure,Success_Rate
+Stripe,VISA,1022,56.18%,1002,20,98.04%
+Stripe,MASTERCARD,797,43.82%,777,20,97.49%
+Adyen,ACCEL,277,40.68%,269,8,97.11%
+Adyen,MASTERCARD,168,24.67%,160,8,95.24%
+Adyen,STAR,166,24.38%,158,8,95.18%
+Adyen,VISA,70,10.28%,63,7,90.00%
