@@ -105,7 +105,7 @@ def prepare_api_payload(csv_row, line_number, config):
         "rankingAlgorithm": "SUPER_ROUTER",
         "eliminationEnabled": True,
         "paymentInfo": {
-            "paymentId": f"PAY{line_number}", # A unique ID for this payment attempt.
+            "paymentId": csv_row.get('paymentId', None), # A unique ID for this payment attempt.
             "amount": float(csv_row.get('amount', 0)),
             "currency": "USD",
             "customerId": "c1",
