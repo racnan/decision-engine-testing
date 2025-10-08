@@ -1,14 +1,25 @@
 import csv
 import os
+import argparse
+import sys
 from collections import Counter, defaultdict
 
-def analyze_results():
+def analyze_results(input_file=None, output_dir=None):
     """
     Reads the simulation results from output_results.csv, analyzes them,
     and prints a summary report including savings and optimization analysis.
     """
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    results_path = os.path.join(project_root, "scene-1", "output_results.csv")
+    
+    if input_file:
+        results_path = input_file
+    else:
+        results_path = os.path.join(project_root, "scene-1", "output_results.csv")
+    
+    if output_dir:
+        output_directory = output_dir
+    else:
+        output_directory = os.path.join(project_root, "scene-1")
 
     if not os.path.exists(results_path):
         print(f"ERROR: Results file not found at {results_path}")
@@ -237,13 +248,21 @@ def generate_ascii_table(headers, rows, title="", max_width=80):
     
     return "\n" + "\n".join(table_lines) + "\n"
 
-def create_csv_performance_report():
+def create_csv_performance_report(input_file=None, output_dir=None):
     """
     Create separate CSV performance reports for each category in a dedicated folder.
     """
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    results_path = os.path.join(project_root, "scene-1", "output_results.csv")
-    reports_folder = os.path.join(project_root, "scene-1", "detailed_performance_analysis")
+    
+    if input_file:
+        results_path = input_file
+    else:
+        results_path = os.path.join(project_root, "scene-1", "output_results.csv")
+    
+    if output_dir:
+        reports_folder = os.path.join(output_dir, "detailed_performance_analysis")
+    else:
+        reports_folder = os.path.join(project_root, "scene-1", "detailed_performance_analysis")
 
     if not os.path.exists(results_path):
         print(f"ERROR: Cannot create CSV reports - results file not found at {results_path}")
@@ -409,13 +428,21 @@ def create_csv_performance_report():
 
     print(f"\nAll CSV reports saved to folder: {reports_folder}")
 
-def create_detailed_performance_report():
+def create_detailed_performance_report(input_file=None, output_dir=None):
     """
     Create detailed ASCII table report file by re-analyzing the results data.
     """
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    results_path = os.path.join(project_root, "scene-1", "output_results.csv")
-    report_path = os.path.join(project_root, "scene-1", "detailed_performance_report.txt")
+    
+    if input_file:
+        results_path = input_file
+    else:
+        results_path = os.path.join(project_root, "scene-1", "output_results.csv")
+    
+    if output_dir:
+        report_path = os.path.join(output_dir, "detailed_performance_report.txt")
+    else:
+        report_path = os.path.join(project_root, "scene-1", "detailed_performance_report.txt")
 
     if not os.path.exists(results_path):
         print(f"ERROR: Cannot create detailed report - results file not found at {results_path}")
@@ -573,7 +600,26 @@ def create_detailed_performance_report():
     except IOError as e:
         print(f"ERROR: Could not write detailed report file: {e}")
 
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Generate results analysis and reports')
+    parser.add_argument('--input-file', type=str,
+                       help='Path to input results CSV file')
+    parser.add_argument('--output-dir', type=str,
+                       help='Output directory for reports')
+    return parser.parse_args()
+
+def main():
+    """Main function with argument parsing"""
+    args = parse_arguments()
+    
+    print("INFO: Starting results analysis...")
+    analyze_results(args.input_file, args.output_dir)
+    print("INFO: Creating detailed performance report...")
+    create_detailed_performance_report(args.input_file, args.output_dir)
+    print("INFO: Creating CSV performance reports...")
+    create_csv_performance_report(args.input_file, args.output_dir)
+    print("INFO: Results analysis complete.")
+
 if __name__ == "__main__":
-    analyze_results()
-    create_detailed_performance_report()
-    create_csv_performance_report()
+    main()

@@ -8,16 +8,15 @@ import yaml  # For reading and parsing YAML files.
 import random  # For generating random numbers.
 import time  # For pausing the script.
 import ast  # For safely parsing string literals from CSV.
+import argparse  # For command line argument parsing.
+import sys  # For system-specific parameters and functions.
 
 # --- Configuration ---
 # These are global constants. They are variables whose values are set once and
 # are not expected to change while the script is running.
 
-# This constructs the full path to the configuration file.
-# os.path.dirname(__file__) gets the directory of this script (e.g., 'scripts').
-# os.path.join then intelligently combines path parts to navigate up ('..') and
-# then into the 'scene-1' directory, making the path robust.
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'scene-1', 'schema.yaml')
+# Default configuration path - can be overridden by command line arguments
+DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'scene-1', 'schema.yaml')
 
 # The web address (URL) of the Decision Engine API we need to call.
 DECISION_ENGINE_URL = "http://localhost:8080/decide-gateway"
@@ -85,7 +84,7 @@ def get_card_isin(networks_list):
         # because we can't proceed without this information.
         raise ValueError(f"No cardIsin mapping found for network combination: {key}")
 
-def prepare_api_payload(csv_row, line_number, config):
+def prepare_api_payload(csv_row, line_number, config, algorithm="SUPER_ROUTER"):
     """
     Prepares the JSON payload for the decision engine API call,
     handling different payload structures based on payment_method_type.
@@ -251,22 +250,52 @@ def analyze_decision_and_run_simulation(decision, csv_row, payment_id, config):
     return results
 
 
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Run decision engine simulations')
+    parser.add_argument('--scene-path', type=str, 
+                       help='Path to scene folder (default: scene-1)')
+    parser.add_argument('--output-dir', type=str,
+                       help='Output directory for results (default: scene folder)')
+    parser.add_argument('--algorithm', type=str, default='SUPER_ROUTER',
+                       help='Algorithm to use (default: SUPER_ROUTER)')
+    return parser.parse_args()
+
 def main():
     """
     This is the main function that orchestrates the entire simulation process.
     It's called at the very end of the script.
     """
-    print("INFO: Starting simulation runner script...")
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Determine paths based on arguments or defaults
+    if args.scene_path:
+        scene_folder = args.scene_path
+        config_path = os.path.join(scene_folder, 'schema.yaml')
+    else:
+        scene_folder = 'scene-1'
+        config_path = DEFAULT_CONFIG_PATH
+    
+    if args.output_dir:
+        output_dir = args.output_dir
+    else:
+        output_dir = scene_folder
+    
+    algorithm = args.algorithm
+    
+    print(f"INFO: Starting simulation runner script for {scene_folder}...")
+    print(f"INFO: Using algorithm: {algorithm}")
 
     # Load the configuration from the YAML file first.
-    config = load_config(CONFIG_PATH)
+    config = load_config(config_path)
     # If loading fails, config will be None, and we exit the script.
     if config is None: return
 
     # Construct the full, absolute paths for the input and output files.
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     input_csv_path = os.path.join(project_root, config['simulation']['output_csv_path'])
-    output_csv_path = os.path.join(project_root,"scene-1" ,"output_results.csv")
+    output_csv_path = os.path.join(project_root, output_dir, "output_results.csv")
 
     # Check if the input CSV file from the generator script actually exists.
     if not os.path.exists(input_csv_path):
@@ -306,7 +335,7 @@ def main():
                 simulation_results = {}
                 try:
                     # Step 1: Prepare the payload for the API call.
-                    api_payload = prepare_api_payload(row, reader.line_num, config)
+                    api_payload = prepare_api_payload(row, reader.line_num, config, algorithm)
 
                     # Step 2: Call the decision engine API.
                     response = requests.post(DECISION_ENGINE_URL, json=api_payload, timeout=5)

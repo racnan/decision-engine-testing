@@ -3,13 +3,8 @@ import csv
 import random
 import os
 import copy
-
-# --- Configuration ---
-# Define the path to the configuration file.
-# os.path.dirname(__file__) gets the directory of the current script (e.g., 'scripts').
-# os.path.join then intelligently combines path parts to navigate up ('..') and then
-# into the 'scene-1' directory, making the path robust.
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'scene-1', 'schema.yaml')
+import argparse
+import sys
 
 
 def load_config(path):
@@ -189,77 +184,273 @@ def generate_transaction_data(config):
     process_fields(config['schema']['transaction_fields'])
     return transaction_data
 
-def main():
+def discover_existing_scenes():
     """
-    Main function to orchestrate the CSV generation process.
+    Discover all existing scene folders in the project directory.
+    Returns a list of scene numbers that have folders.
     """
-    print("INFO: Starting CSV generator script...")
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    scene_numbers = []
     
-    config = load_config(CONFIG_PATH)
-    if config is None: return
+    for item in os.listdir(project_root):
+        if os.path.isdir(os.path.join(project_root, item)) and item.startswith('scene-'):
+            try:
+                scene_num = int(item.split('-')[1])
+                scene_numbers.append(scene_num)
+            except (ValueError, IndexError):
+                continue
+    
+    return sorted(scene_numbers)
+
+def parse_scene_numbers(scenes_input):
+    """
+    Parse comma-separated scene numbers or 'all' keyword.
+    Returns a list of scene numbers.
+    """
+    if scenes_input.lower() == 'all':
+        return discover_existing_scenes()
+    
+    scene_numbers = []
+    for scene_str in scenes_input.split(','):
+        scene_str = scene_str.strip()
+        try:
+            scene_num = int(scene_str)
+            scene_numbers.append(scene_num)
+        except ValueError:
+            print(f"ERROR: Invalid scene number '{scene_str}'. Must be an integer.")
+            return None
+    
+    return sorted(list(set(scene_numbers)))  # Remove duplicates and sort
+
+def validate_scenes(scene_numbers):
+    """
+    Validate that schema.yaml exists for all specified scenes.
+    Returns (valid_scenes, missing_scenes).
+    """
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    valid_scenes = []
+    missing_scenes = []
+    
+    for scene_num in scene_numbers:
+        scene_folder = f"scene-{scene_num}"
+        schema_path = os.path.join(project_root, scene_folder, 'schema.yaml')
+        
+        if os.path.exists(schema_path):
+            valid_scenes.append(scene_num)
+        else:
+            missing_scenes.append(scene_num)
+    
+    return valid_scenes, missing_scenes
+
+def generate_transactions_for_scene(scene_number):
+    """
+    Generate transactions for a single scene using its specific schema.yaml.
+    Returns True if successful, False otherwise.
+    """
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    scene_folder = f"scene-{scene_number}"
+    schema_path = os.path.join(project_root, scene_folder, 'schema.yaml')
+    
+    print(f"\n[SCENE {scene_number}] Starting transaction generation...")
+    
+    # Load scene-specific configuration
+    config = load_config(schema_path)
+    if config is None:
+        print(f"ERROR: Failed to load schema for scene-{scene_number}")
+        return False
 
     try:
-        # We wrap the main logic in a try...except block to catch any errors
-        # from our validation or generation functions and exit gracefully.
         validate_config(config)
     except (AssertionError, KeyError) as e:
-        print(f"FATAL: Configuration validation failed: {e}")
-        return
+        print(f"ERROR: Configuration validation failed for scene-{scene_number}: {e}")
+        return False
 
-    print("INFO: Configuration loaded successfully.")
-
-    # Construct a full, absolute path to place the output file in the project root.
+    # Get output path from config (should be scene-specific)
     output_filename = config['simulation']['output_csv_path']
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    output_path = os.path.join(project_root, output_filename)
+    if not output_filename.startswith('./'):
+        # Ensure the path is relative to project root
+        output_path = os.path.join(project_root, output_filename)
+    else:
+        output_path = os.path.join(project_root, output_filename.lstrip('./'))
 
     headers = get_csv_headers(config)
 
     try:
-        # The 'with' statement ensures the file is properly closed after we're done.
         with open(output_path, 'w', newline='') as f:
-            # A DictWriter is convenient as it can write a dictionary directly to a CSV row.
             writer = csv.DictWriter(f, fieldnames=headers)
-            # Write the header row first.
             writer.writeheader()
-            print(f"INFO: Successfully created CSV file and wrote headers to: {output_path}")
-
+            
             num_transactions = config['simulation']['num_transactions']
-            print(f"INFO: Starting generation of {num_transactions} transactions...")
+            print(f"[SCENE {scene_number}] Generating {num_transactions} transactions...")
 
-            # This is the main loop where each transaction row is created.
             for i in range(1, num_transactions + 1):
-                # A progress indicator for long-running generation.
                 if i % 1000 == 0:
-                    print(f"  ...generating transaction {i} of {num_transactions}")
+                    print(f"[SCENE {scene_number}] Progress: {i}/{num_transactions} transactions")
                 
-                # 1. Generate the base transaction data (e.g., amount, available_networks).
+                # Generate transaction data
                 row_data = generate_transaction_data(config)
 
-                # 2. Determine the outcome for each processor for this specific transaction.
+                # Add processor outcomes
                 for processor in config['processors']:
                     processor_name = processor['name']
-                    
-                    # Get the current state (properties) for this processor and this transaction.
                     state = get_current_processor_state(config, i, processor_name)
                     
-                    # Perform a random roll against the success_rate to determine the outcome.
                     if random.random() < state.get('success_rate', 0):
                         outcome = "success"
                     else:
                         outcome = "fail"
                     
-                    # Add the outcome to our row data dictionary (e.g., row_data['Stripe_outcome'] = 'success').
                     row_data[f"{processor_name}_outcome"] = outcome
                 
-                # 3. Write the complete dictionary as a new row in the CSV file.
                 writer.writerow(row_data)
 
+        print(f"[SCENE {scene_number}] ✓ Successfully generated transactions: {output_path}")
+        return True
+        
     except (IOError, KeyError, ValueError) as e:
-        print(f"FATAL: An error occurred during CSV generation: {e}")
-        return
+        print(f"[SCENE {scene_number}] ✗ Error during generation: {e}")
+        return False
 
-    print(f"\nINFO: Script finished. Successfully generated {num_transactions} transactions in '{output_path}'.")
+def parse_arguments():
+    """
+    Parse command line arguments for multi-scene transaction generation.
+    """
+    parser = argparse.ArgumentParser(
+        description='Generate transaction CSV files for one or more scenes',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python3 scripts/csv_generator.py --scenes 1,2,3
+  python3 scripts/csv_generator.py --scenes 1,5,10
+  python3 scripts/csv_generator.py --scenes all
+  python3 scripts/csv_generator.py  # Legacy mode: generates for scene-1 only
+        """
+    )
+    
+    parser.add_argument(
+        '--scenes',
+        type=str,
+        help='Comma-separated list of scene numbers (e.g., "1,2,3") or "all" for all existing scenes'
+    )
+    
+    return parser.parse_args()
+
+def main():
+    """
+    Main function to orchestrate the CSV generation process.
+    Supports both legacy single-scene mode and new multi-scene mode.
+    """
+    args = parse_arguments()
+    
+    if args.scenes:
+        # Multi-scene mode
+        print("="*60)
+        print("           MULTI-SCENE TRANSACTION GENERATOR")
+        print("="*60)
+        
+        # Parse scene numbers
+        scene_numbers = parse_scene_numbers(args.scenes)
+        if scene_numbers is None:
+            sys.exit(1)
+        
+        if not scene_numbers:
+            print("ERROR: No valid scene numbers provided")
+            sys.exit(1)
+        
+        print(f"Requested scenes: {', '.join(map(str, scene_numbers))}")
+        
+        # Validate scenes
+        valid_scenes, missing_scenes = validate_scenes(scene_numbers)
+        
+        if missing_scenes:
+            print(f"\n✗ ERROR: Missing schema.yaml for scenes: {', '.join(f'scene-{num}' for num in missing_scenes)}")
+            print("Please ensure schema.yaml exists in each scene folder before generating transactions.")
+            sys.exit(1)
+        
+        print(f"✓ All scenes validated successfully")
+        
+        # Generate transactions for each scene
+        successful_scenes = []
+        failed_scenes = []
+        
+        for scene_num in valid_scenes:
+            success = generate_transactions_for_scene(scene_num)
+            if success:
+                successful_scenes.append(scene_num)
+            else:
+                failed_scenes.append(scene_num)
+        
+        # Summary
+        print(f"\n{'='*60}")
+        print("                    GENERATION SUMMARY")
+        print(f"{'='*60}")
+        print(f"Total scenes processed: {len(valid_scenes)}")
+        print(f"Successful: {len(successful_scenes)}")
+        print(f"Failed: {len(failed_scenes)}")
+        
+        if successful_scenes:
+            print(f"✓ Successfully generated transactions for: {', '.join(f'scene-{num}' for num in successful_scenes)}")
+        
+        if failed_scenes:
+            print(f"✗ Failed to generate transactions for: {', '.join(f'scene-{num}' for num in failed_scenes)}")
+            sys.exit(1)
+        
+    else:
+        # Legacy single-scene mode (backward compatibility)
+        print("INFO: Starting CSV generator script (legacy mode for scene-1)...")
+        
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'scene-1', 'schema.yaml')
+        config = load_config(config_path)
+        if config is None:
+            return
+
+        try:
+            validate_config(config)
+        except (AssertionError, KeyError) as e:
+            print(f"FATAL: Configuration validation failed: {e}")
+            return
+
+        print("INFO: Configuration loaded successfully.")
+
+        output_filename = config['simulation']['output_csv_path']
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        output_path = os.path.join(project_root, output_filename)
+
+        headers = get_csv_headers(config)
+
+        try:
+            with open(output_path, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
+                print(f"INFO: Successfully created CSV file and wrote headers to: {output_path}")
+
+                num_transactions = config['simulation']['num_transactions']
+                print(f"INFO: Starting generation of {num_transactions} transactions...")
+
+                for i in range(1, num_transactions + 1):
+                    if i % 1000 == 0:
+                        print(f"  ...generating transaction {i} of {num_transactions}")
+                    
+                    row_data = generate_transaction_data(config)
+
+                    for processor in config['processors']:
+                        processor_name = processor['name']
+                        state = get_current_processor_state(config, i, processor_name)
+                        
+                        if random.random() < state.get('success_rate', 0):
+                            outcome = "success"
+                        else:
+                            outcome = "fail"
+                        
+                        row_data[f"{processor_name}_outcome"] = outcome
+                    
+                    writer.writerow(row_data)
+
+        except (IOError, KeyError, ValueError) as e:
+            print(f"FATAL: An error occurred during CSV generation: {e}")
+            return
+
+        print(f"\nINFO: Script finished. Successfully generated {num_transactions} transactions in '{output_path}'.")
 
 
 # This is a standard Python construct. The code inside this 'if' block
