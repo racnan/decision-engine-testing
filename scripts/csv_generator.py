@@ -3,6 +3,7 @@ import csv
 import random
 import os
 import copy
+import time
 import argparse
 import sys
 
@@ -151,37 +152,56 @@ def generate_transaction_data(config):
     Acts as an orchestrator, calling the correct generator for each transaction field,
     handling conditional logic.
     """
+    # This dictionary will store the generated data for a single transaction.
     transaction_data = {}
     
+    # A nested function is used here to allow for recursion.
+    # This is useful for handling nested conditional generation logic.
     def process_fields(fields):
+        # Iterate over each field defined in the current level of the schema.
         for field_config in fields:
             generator_type = field_config.get('generator')
 
+            # --- Conditional Generation ---
+            # If the field is a 'conditional_generator', it means we need to decide
+            # which sub-fields to generate based on the value of a previously generated field.
             if generator_type == 'conditional_generator':
+                # 'on_field' tells us which previously generated field to check.
                 conditional_field_name = field_config['on_field']
+                # Get the value of that field from our transaction_data dictionary.
                 conditional_value = transaction_data.get(conditional_field_name)
                 
+                # The 'random_choice' generator returns a list. We need the actual value inside.
                 if conditional_value and isinstance(conditional_value, list):
                     conditional_value = conditional_value[0]
 
+                # Check if the value we found matches one of the defined conditions.
                 if conditional_value in field_config['conditions']:
+                    # If it matches, recursively call this function to process the sub-fields.
                     process_fields(field_config['conditions'][conditional_value])
 
+            # --- Standard Generation ---
+            # If it's not a conditional generator, it's a standard data field.
             elif generator_type:
                 field_name = field_config['name']
                 params = field_config.get('params', {})
                 
                 value = None
+                # Call the appropriate generator function based on the 'generator' type.
                 if generator_type == "random_number":
                     value = generate_random_number(params)
                 elif generator_type == "random_choice":
                     value = generate_random_choice(params)
                 else:
+                    # If the generator type is unknown, raise an error to stop the script.
                     raise ValueError(f"Unknown generator type '{generator_type}' for field '{field_name}'.")
                 
+                # Store the generated value in our dictionary with its field name as the key.
                 transaction_data[field_name] = value
 
+    # Start the process by calling the function with the top-level transaction fields.
     process_fields(config['schema']['transaction_fields'])
+    # Return the completed dictionary for this transaction.
     return transaction_data
 
 def discover_existing_scenes():
@@ -289,6 +309,8 @@ def generate_transactions_for_scene(scene_number):
                 
                 # Generate transaction data
                 row_data = generate_transaction_data(config)
+
+                row_data['paymentId'] = f"PAY_{int(time.time() * 1000)}"
 
                 # Add processor outcomes
                 for processor in config['processors']:
@@ -445,6 +467,9 @@ def main():
                         row_data[f"{processor_name}_outcome"] = outcome
                     
                     writer.writerow(row_data)
+
+                # Add a tiny sleep to ensure timestamp is unique for each row
+                time.sleep(0.001)
 
         except (IOError, KeyError, ValueError) as e:
             print(f"FATAL: An error occurred during CSV generation: {e}")
