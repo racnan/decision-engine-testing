@@ -66,12 +66,111 @@ def get_csv_headers(config):
     
     # Add the processor outcome columns
     for processor in config['processors']:
-        headers.append(f"{processor['name']}_outcome")
+        processor_name = processor['name']
+        # Iterate through each network this processor supports by default
+        for network in processor.get('defaults', {}).get('supported_networks', []):
+            headers.append(f"{processor_name}_{network}_outcome")
         
     # Use dict.fromkeys to preserve order and remove duplicates
     unique_headers = list(dict.fromkeys(headers))
     print(f"INFO: Generated CSV headers: {unique_headers}")
     return unique_headers
+
+def find_matching_events(config, entry_number):
+    """
+    Finds all events from the event_schedule that include the current transaction number
+    in their transaction_range and returns them as a list of structured event objects.
+    """
+    matched_events = []
+    for event in config.get('event_schedule', []):
+        # Ensure 'transaction_range' exists and is a list before unpacking
+        transaction_range = event.get('transaction_range')
+        if isinstance(transaction_range, list) and len(transaction_range) == 2:
+            start, end = transaction_range
+            if start <= entry_number <= end:
+                # Found a matching event. Structure the output.
+                payment_method_type_data = event.get("payment_method_type", None)
+                structured_pmt = None
+                if payment_method_type_data and isinstance(payment_method_type_data, dict):
+                    structured_pmt = {
+                        "CARD": payment_method_type_data.get("CARD", None),
+                        "WALLET": payment_method_type_data.get("WALLET", None)
+                    }
+
+                amount_data = event.get("amount", None)
+                amount = None
+                if amount_data and isinstance(amount_data, dict):
+                    amount = {
+                        "gt": amount_data.get("gt"),
+                        "lt": amount_data.get("lt")
+                    }
+
+                matched_event_data = {
+                    "success_rate": event.get("success_rate"),
+                    "processors": event.get("processors", None),
+                    "payment_method_type": structured_pmt,
+                    "amount": amount
+                }
+                matched_events.append(matched_event_data)
+    return matched_events
+
+def check_transaction_against_event(transaction_data, event, processor_name, network):
+    """
+    Checks if the transaction data satisfies ALL conditions specified in an event.
+    Returns True if all conditions are met, otherwise False.
+    """
+    # print(event)
+    # Condition 1: Processor Match (if specified in event)
+    event_processors = event.get("processors")
+    if event_processors and processor_name not in event_processors:
+        return False # Event is for specific processors, and this isn't one of them
+
+    # Condition 2: Amount Match (if specified in event)
+    amount_criteria = event.get("amount")
+    if amount_criteria:
+        transaction_amount = transaction_data.get("amount", 0)
+        gt = amount_criteria.get('gt')
+        lt = amount_criteria.get('lt')
+
+        if gt is None and lt is not None and transaction_amount > lt:        
+            return False
+        elif lt is None and gt is not None and transaction_amount < gt:
+            return False
+        elif gt is not None and lt is not None and lt <= transaction_amount <= gt:
+            return False 
+        
+        # # If gt is defined, amount must be greater.
+        # if gt is not None and not transaction_amount > gt:
+        #     return False
+        # # If lt is defined, amount must be less.
+        # if lt is not None and not transaction_amount < lt:
+        #     return False
+
+    # Condition 3: Payment Method Match (if specified in event)
+    pmt_conditions = event.get("payment_method_type")
+    if pmt_conditions:
+        # This flag will be set to True if we find a positive match.
+        # If we go through all conditions and it's still False, the check fails.
+        network_match_found = False
+        for pmt_type, conditions in pmt_conditions.items(): # "CARD", "WALLET"
+            if not conditions: continue
+            # Check if the transaction's payment method type matches the event's type
+            if transaction_data.get("payment_method_type") == [pmt_type]:
+                for condition_detail in conditions:
+                    # Check if the current transaction's network is in the event's 'values'
+                    if network in condition_detail.get('values', []):
+                        network_match_found = True
+                        break # Found a match for this network, no need to check others in this pmt_type
+            if network_match_found:
+                break # Found a match, no need to check other pmt_types (e.g. WALLET)
+        
+        # If after checking all payment conditions, no match was ever found for the network
+        if not network_match_found:
+            return False
+
+    # If we've gotten this far, it means none of the checks have failed.
+    # This implies all specified conditions in the event have been met by the transaction.
+    return True
 
 def get_current_processor_state(config, entry_number, processor_name):
     """
@@ -312,19 +411,40 @@ def generate_transactions_for_scene(scene_number):
 
                 row_data['paymentId'] = f"PAY_{int(time.time() * 1000)}"
 
-                # Add processor outcomes
+                active_events = find_matching_events(config, i)
+
+                # Determine the outcome for each processor for this specific transaction.
                 for processor in config['processors']:
                     processor_name = processor['name']
+                    
+                    # Get the current state (properties) for this processor and this transaction.
                     state = get_current_processor_state(config, i, processor_name)
+
+                    for network in state.get('supported_networks', []):
+                        # Start with the processor's default or current success rate.
+                        final_success_rate = state.get('success_rate', 0)
+
+                        # --- Event Logic ---
+                        # Iterate through the active events. The first one that matches completely will be used.
+                        for event in active_events:
+                            # Check if the current transaction meets ALL of the event's criteria.
+                            if check_transaction_against_event(row_data, event, processor_name, network):
+                                # If it's a match, override the success rate and stop checking other events.
+                                final_success_rate = event["success_rate"]
+                                break # Exit the 'for event in active_events' loop
+                        
+                        # Perform a random roll against the final success_rate to determine the outcome.
+                        if random.random() < final_success_rate:
+                            outcome = "success"
+                        else:
+                            outcome = "fail"
                     
-                    if random.random() < state.get('success_rate', 0):
-                        outcome = "success"
-                    else:
-                        outcome = "fail"
-                    
-                    row_data[f"{processor_name}_outcome"] = outcome
+                        # Add the outcome to our row data dictionary (e.g., row_data['Stripe_outcome'] = 'success').
+                        row_data[f"{processor_name}_{network}_outcome"] = outcome
                 
                 writer.writerow(row_data)
+                # Add a tiny sleep to ensure timestamp is unique for each row
+                time.sleep(0.001)
 
         print(f"[SCENE {scene_number}] ✓ Successfully generated transactions: {output_path}")
         return True
@@ -455,21 +575,42 @@ def main():
                     
                     row_data = generate_transaction_data(config)
 
+                    row_data['paymentId'] = f"PAY_{int(time.time() * 1000)}"
+
+                    active_events = find_matching_events(config, i)
+
+                    # Determine the outcome for each processor for this specific transaction.
                     for processor in config['processors']:
                         processor_name = processor['name']
+                        
+                        # Get the current state (properties) for this processor and this transaction.
                         state = get_current_processor_state(config, i, processor_name)
+
+                        for network in state.get('supported_networks', []):
+                            # Start with the processor's default or current success rate.
+                            final_success_rate = state.get('success_rate', 0)
+
+                            # --- Event Logic ---
+                            # Iterate through the active events. The first one that matches completely will be used.
+                            for event in active_events:
+                                # Check if the current transaction meets ALL of the event's criteria.
+                                if check_transaction_against_event(row_data, event, processor_name, network):
+                                    # If it's a match, override the success rate and stop checking other events.
+                                    final_success_rate = event["success_rate"]
+                                    break # Exit the 'for event in active_events' loop
+                            
+                            # Perform a random roll against the final success_rate to determine the outcome.
+                            if random.random() < final_success_rate:
+                                outcome = "success"
+                            else:
+                                outcome = "fail"
                         
-                        if random.random() < state.get('success_rate', 0):
-                            outcome = "success"
-                        else:
-                            outcome = "fail"
-                        
-                        row_data[f"{processor_name}_outcome"] = outcome
+                            # Add the outcome to our row data dictionary (e.g., row_data['Stripe_outcome'] = 'success').
+                            row_data[f"{processor_name}_{network}_outcome"] = outcome
                     
                     writer.writerow(row_data)
-
-                # Add a tiny sleep to ensure timestamp is unique for each row
-                time.sleep(0.001)
+                    # Add a tiny sleep to ensure timestamp is unique for each row
+                    time.sleep(0.001)
 
         except (IOError, KeyError, ValueError) as e:
             print(f"FATAL: An error occurred during CSV generation: {e}")
