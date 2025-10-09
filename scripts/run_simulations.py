@@ -273,7 +273,7 @@ def analyze_decision_and_run_simulation(decision, csv_row, payment_id, config):
         is_valid = (network in payment_networks_available and is_network_supported(gateway, network))
         if not is_valid: continue
         
-        if csv_row.get(f"{gateway}_outcome") == 'success':
+        if csv_row.get(f"{gateway}_{network}_outcome") == 'success':
             valid_successful_options.append(option)
 
     # Determine best possible option (highest savings, respecting priority for ties)
@@ -305,7 +305,7 @@ def analyze_decision_and_run_simulation(decision, csv_row, payment_id, config):
     # Simulate the chosen option
     chosen_gateway = chosen_option.get('gateway')
     chosen_network = chosen_option.get('payment_method') # CORRECTED KEY
-    pre_determined_outcome = csv_row.get(f"{chosen_gateway}_outcome", "fail")
+    pre_determined_outcome = csv_row.get(f"{chosen_gateway}_{chosen_network}_outcome", "fail")
 
     results.update({
         "chosen_processor": chosen_gateway,
