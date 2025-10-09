@@ -162,9 +162,79 @@ def send_feedback(processor, outcome, payment_id, network):
     }
     try:
         print(f"  -> Sending feedback for '{processor}' on network '{network}', outcome: '{outcome}'.")
-        requests.post(FEEDBACK_API_URL, json=feedback_payload, timeout=2)
+        response = requests.post(FEEDBACK_API_URL, json=feedback_payload, timeout=2)
+        response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        print(f"ERROR: Feedback API call failed for gateway {processor}: {e}")
+        print(f"FATAL: Feedback API call failed for gateway {processor}: {e}")
+        print("Terminating session due to feedback API error.")
+        sys.exit(1)
+
+def check_service_health():
+    """
+    Performs a pre-flight health check to ensure the Decision Engine service
+    is running and responding before processing any transactions.
+    """
+    print("INFO: Performing service health check...")
+    
+    # Create a minimal test payload to verify service availability
+    test_payload = {
+        "merchantId": "m3",
+        "eligibleGatewayList": ["test_gateway"],
+        "rankingAlgorithm": "SUPER_ROUTER",
+        "eliminationEnabled": True,
+        "paymentInfo": {
+            "paymentId": "health_check_test",
+            "amount": 100.0,
+            "currency": "USD",
+            "customerId": "c1",
+            "paymentMethodType": "CARD",
+            "paymentMethod": "VISA",
+            "paymentType": "ORDER_PAYMENT"
+        }
+    }
+    
+    try:
+        print(f"INFO: Testing connection to {DECISION_ENGINE_URL}...")
+        response = requests.post(DECISION_ENGINE_URL, json=test_payload, timeout=10)
+        response.raise_for_status()
+        print("INFO: ✓ Service health check passed - Decision Engine is responding")
+        return True
+        
+    except requests.exceptions.ConnectionError as e:
+        print(f"FATAL: ✗ Cannot connect to Decision Engine service at {DECISION_ENGINE_URL}")
+        print("POSSIBLE CAUSES:")
+        print("  - Decision Engine service is not running")
+        print("  - Service is not listening on port 8080")
+        print("  - Network connectivity issues")
+        print("  - Firewall blocking the connection")
+        print(f"ERROR DETAILS: {e}")
+        sys.exit(1)
+        
+    except requests.exceptions.Timeout as e:
+        print(f"FATAL: ✗ Decision Engine service timeout after 10 seconds")
+        print("POSSIBLE CAUSES:")
+        print("  - Service is running but overloaded")
+        print("  - Network latency issues")
+        print("  - Service is starting up (try again in a few moments)")
+        print(f"ERROR DETAILS: {e}")
+        sys.exit(1)
+        
+    except requests.exceptions.HTTPError as e:
+        print(f"FATAL: ✗ Decision Engine service returned HTTP error: {e}")
+        print("POSSIBLE CAUSES:")
+        print("  - Service configuration issues")
+        print("  - Authentication/authorization problems")
+        print("  - API endpoint changes")
+        print("  - Service internal errors")
+        sys.exit(1)
+        
+    except requests.exceptions.RequestException as e:
+        print(f"FATAL: ✗ Unexpected error during service health check: {e}")
+        print("POSSIBLE CAUSES:")
+        print("  - Unknown network issues")
+        print("  - Service compatibility problems")
+        print("  - System resource constraints")
+        sys.exit(1)
 
 def analyze_decision_and_run_simulation(decision, csv_row, payment_id, config):
     """
@@ -287,6 +357,9 @@ def main():
     print(f"INFO: Starting simulation runner script for {scene_folder}...")
     print(f"INFO: Using algorithm: {algorithm}")
 
+    # Perform service health check before any processing
+    check_service_health()
+
     # Load the configuration from the YAML file first.
     config = load_config(config_path)
     # If loading fails, config will be None, and we exit the script.
@@ -331,8 +404,6 @@ def main():
                 if reader.line_num % 500 == 0:
                     print(f"  ...processing transaction {reader.line_num}")
 
-                # We set default values for our results.
-                simulation_results = {}
                 try:
                     # Step 1: Prepare the payload for the API call.
                     api_payload = prepare_api_payload(row, reader.line_num, config, algorithm)
@@ -356,11 +427,50 @@ def main():
                     payment_id = api_payload['paymentInfo']['paymentId']
                     simulation_results = analyze_decision_and_run_simulation(decision, row, payment_id, config)
 
+                except requests.exceptions.ConnectionError as e:
+                    print(f"FATAL: ✗ Cannot connect to Decision Engine during transaction {reader.line_num}: {e}")
+                    print("POSSIBLE CAUSES:")
+                    print("  - Decision Engine service stopped during execution")
+                    print("  - Network connection lost")
+                    print("  - Service crashed or restarted")
+                    print("Terminating session due to connection failure.")
+                    sys.exit(1)
+                
+                except requests.exceptions.Timeout as e:
+                    print(f"FATAL: ✗ Decision Engine timeout on transaction {reader.line_num}: {e}")
+                    print("POSSIBLE CAUSES:")
+                    print("  - Service overloaded or unresponsive")
+                    print("  - Network latency issues")
+                    print("  - Service performance degradation")
+                    print("Terminating session due to timeout.")
+                    sys.exit(1)
+                
+                except requests.exceptions.HTTPError as e:
+                    print(f"FATAL: ✗ Decision Engine HTTP error on transaction {reader.line_num}: {e}")
+                    print("POSSIBLE CAUSES:")
+                    print("  - 4xx: Invalid request payload or authentication issues")
+                    print("  - 5xx: Service internal errors or configuration problems")
+                    print("  - API contract changes or incompatibilities")
+                    print("Terminating session due to HTTP error.")
+                    sys.exit(1)
+                
                 except requests.exceptions.RequestException as e:
-                    print(f"ERROR: API call failed for row {reader.line_num}: {e}")
+                    print(f"FATAL: ✗ Unexpected API error on transaction {reader.line_num}: {e}")
+                    print("POSSIBLE CAUSES:")
+                    print("  - Unknown network or protocol issues")
+                    print("  - Service compatibility problems")
+                    print("  - System resource constraints")
+                    print("Terminating session due to API error.")
+                    sys.exit(1)
                 
                 except (ValueError, SyntaxError) as e:
-                    print(f"ERROR: Could not process data or prepare payload for row {reader.line_num}: {e}")
+                    print(f"FATAL: ✗ Data processing error on transaction {reader.line_num}: {e}")
+                    print("POSSIBLE CAUSES:")
+                    print("  - Invalid CSV data format")
+                    print("  - Configuration file issues")
+                    print("  - Data corruption or format changes")
+                    print("Terminating session due to data processing error.")
+                    sys.exit(1)
                 
                 # Step 4: Add the simulation results to the original row data.
                 row.update(simulation_results)
