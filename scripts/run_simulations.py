@@ -96,11 +96,20 @@ def prepare_api_payload(csv_row, line_number, config, algorithm="SUPER_ROUTER"):
     # Get the list of all eligible gateways from the config
     eligible_gateways = [p['name'] for p in config['processors']]
 
+    # Dynamically create the eligibleGatewayPaymentMethodsList
+    eligible_gateway_payment_methods = []
+    for processor in config.get('processors', []):
+        eligible_gateway_payment_methods.append({
+            "gateway": processor.get('name'),
+            "payment_methods": processor.get('defaults', {}).get('supported_networks', [])
+        })
+
     # --- Base Payload --- 
     # This part is common to all payment types
     payload = {
         "merchantId": "m3",
         "eligibleGatewayList": eligible_gateways, # Dynamically populated
+        "eligibleGatewayPaymentMethodsList": eligible_gateway_payment_methods,
         "rankingAlgorithm": "SUPER_ROUTER",
         "eliminationEnabled": True,
         "paymentInfo": {
