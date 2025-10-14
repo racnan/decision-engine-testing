@@ -323,11 +323,7 @@ def analyze_decision_and_run_simulation(decision, csv_row, payment_id, config):
         "savings": chosen_option.get('saving', 0.0) # CORRECTED KEY
     })
 
-    # Send feedback for the simulated attempt
-    send_feedback(chosen_gateway, pre_determined_outcome, payment_id, chosen_network)
-
-    return results
-
+    return (chosen_gateway, pre_determined_outcome, payment_id, chosen_network, results)
 
 def parse_arguments():
     """Parse command line arguments"""
@@ -434,7 +430,11 @@ def main():
 
                     # Step 3: Analyze the decision, simulate the transaction, and send feedback.
                     payment_id = api_payload['paymentInfo']['paymentId']
-                    simulation_results = analyze_decision_and_run_simulation(decision, row, payment_id, config)
+                    # simulation_results = analyze_decision_and_run_simulation(decision, row, payment_id, config)
+                    (chosen_gateway, pre_determined_outcome, payment_id, chosen_network, simulation_results) = analyze_decision_and_run_simulation(decision, row, payment_id, config)
+
+                    send_feedback(chosen_gateway, "PENDING_VBV", payment_id, chosen_network)   
+                    send_feedback(chosen_gateway, pre_determined_outcome, payment_id, chosen_network)                    
 
                 except requests.exceptions.ConnectionError as e:
                     print(f"FATAL: ✗ Cannot connect to Decision Engine during transaction {reader.line_num}: {e}")
