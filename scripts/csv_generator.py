@@ -384,13 +384,8 @@ def generate_transactions_for_scene(scene_number):
         print(f"ERROR: Configuration validation failed for scene-{scene_number}: {e}")
         return False
 
-    # Get output path from config (should be scene-specific)
-    output_filename = config['simulation']['output_csv_path']
-    if not output_filename.startswith('./'):
-        # Ensure the path is relative to project root
-        output_path = os.path.join(project_root, output_filename)
-    else:
-        output_path = os.path.join(project_root, output_filename.lstrip('./'))
+    # Generate CSV in the same directory as schema.yaml
+    output_path = os.path.join(project_root, scene_folder, 'transactions.csv')
 
     headers = get_csv_headers(config)
 
@@ -554,9 +549,9 @@ def main():
 
         print("INFO: Configuration loaded successfully.")
 
-        output_filename = config['simulation']['output_csv_path']
+        # Generate CSV in the same directory as schema.yaml (legacy mode for scene-1)
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        output_path = os.path.join(project_root, output_filename)
+        output_path = os.path.join(project_root, 'scene-1', 'transactions.csv')
 
         headers = get_csv_headers(config)
 
