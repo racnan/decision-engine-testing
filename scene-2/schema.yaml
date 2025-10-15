@@ -9,7 +9,6 @@
 # Global settings for this simulation run.
 simulation:
   num_transactions: 2500
-  output_csv_path: "./scene-2/transactions.csv"
 
 # Defines the data model for the entire simulation.
 schema:
