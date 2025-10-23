@@ -499,6 +499,9 @@ def main():
                 print("✗")
                 print(f"  → Error: {error}")
                 print(f"  → Run {run_num} FAILED")
+                print("✗ FATAL: Terminating all simulations due to run failure")
+                print("  Please fix the issue and restart the simulation")
+                sys.exit(1)
         
         # Collect scene results
         scene_results = collect_run_results(scene_folder, num_runs)
