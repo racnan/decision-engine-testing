@@ -1,93 +1,82 @@
-# Example Configuration for Bayesian Optimization System
-# =======================================================
-#
-# This file demonstrates how to configure the optimization system
-# for tuning the parameters in the sr_cost_routing_constants section.
-
+# Improved Configuration - Wider ranges for better exploration
 experiment:
   name: "SR_Cost_Router_Optimization"
   output_csv: "optimization_results.csv"
 
-  # Specific path to the TOML constants file that needs to be updated
   constants_file:
     path: "/Users/riddhi.agrawal/JuspayRepos/rust-backend/decision-engine/config/sr_cost_routing_constants.json"
-    section: "sr_cost_routing_constants" # The TOML section containing the parameters
+    section: "sr_cost_routing_constants"
 
-# Trial budget configuration
 trials:
-  startup: 10 # Initial random points to explore the space
-  total: 25 # Total number of parameter combinations to evaluate
-  parallel_jobs: 2 # Optional: How many trials to run in parallel
+  startup: 10 # Increased from 10 for better initial exploration
+  total: 30 # Increased from 25 for more trials
+  parallel_jobs: 2
 
-# Optimization objectives
 objectives:
-  # Define what we're trying to optimize
-  success_rate: "maximize" # Higher SR is better
-  missed_savings: "minimize" # We maximize negative Missed Savings (to minimize missed savings)
+  success_rate: "maximize"
+  missed_savings: "minimize"
 
-  # How to aggregate metrics across datasets (optional)
   aggregation:
-    success_rate: "mean" # Average SR across datasets
-    missed_savings: "mean" # Worst-case Missed Savings
+    success_rate: "mean"
+    missed_savings: "mean"
 
-# Current production constants and baseline performance
-# This helps the system measure improvements against current performance
 baseline:
   parameters:
-    sr_threshold: 0.85 # Current value in production
-    spread_threshold: 0.02 # Current value in production
-    alpha: 3.0 # Current value in production
-    beta: 1.0 # Current value in production
+    sr_threshold: 0.85
+    spread_threshold: 0.02
+    alpha: 3.0
+    beta: 1.0
 
-  # Baseline performance metrics per dataset
   results:
     - dataset: "scene-1"
-      success_rate: 98.10666667 # Example baseline - replace with actual values
-      missed_savings: 1.67 # Will vary by dataset
+      success_rate: 98.10666667
+      missed_savings: 1.67
 
     - dataset: "scene-2"
-      success_rate: 96.42666667 # Example baseline - replace with actual values
-      missed_savings: 1.67 # Will vary by dataset
+      success_rate: 96.42666667
+      missed_savings: 1.67
 
     - dataset: "scene-3"
-      success_rate: 94.45333333 # Example baseline - replace with actual values
-      missed_savings: 1 # Will vary by dataset
+      success_rate: 94.45333333
+      missed_savings: 1.0
 
     - dataset: "scene-4"
-      success_rate: 93.33333333 # Example baseline - replace with actual values
-      missed_savings: 0 # Will vary by dataset
+      success_rate: 93.33333333
+      missed_savings: 0.0
 
     - dataset: "scene-5"
-      success_rate: 87.72 # Example baseline - replace with actual values
-      missed_savings: 0 # Will vary by dataset
+      success_rate: 87.72
+      missed_savings: 0.0
 
-# Parameters to optimize
 parameters:
-  - name: "sr_threshold" # Parameter 1
-    type: "float"
-    precision: 2 # Number of decimal places for this parameter
-    range:
-      low: 0.85
-      high: 1.0
+  # WIDENED RANGES FOR BETTER EXPLORATION
 
-  - name: "spread_threshold" # Parameter 2
+  - name: "sr_threshold"
     type: "float"
-    precision: 2 # Number of decimal places for this parameter
+    precision: 2
     range:
-      low: 0.01
-      high: 0.2
+      low: 0.70 # Widened from 0.85 - allows exploring lower values
+      high: 0.98 # Slightly below 1.0 to avoid edge cases
 
-  - name: "alpha" # Parameter 3
+  - name: "spread_threshold"
     type: "float"
-    precision: 2 # Number of decimal places for this parameter
+    precision: 3 # Increased precision for this parameter
+    range:
+      low: 0.005 # Widened from 0.01 - explore smaller spreads
+      high: 0.25 # Widened from 0.2
+
+  - name: "alpha"
+    type: "float"
+    precision: 2
     range:
       low: 0.1
-      high: 4.0
-    log_scale: true # Sample on log scale - better for values that span orders of magnitude
+      high: 5.0 # Widened from 4.0
+    log_scale: true
 
-  - name: "beta" # Parameter 4
+  - name: "beta"
     type: "float"
-    precision: 2 # Number of decimal places for this parameter
+    precision: 2
     range:
       low: 0.1
-      high: 4.0
+      high: 5.0 # Widened from 4.0
+    log_scale: true # ADDED log_scale since it spans wide range

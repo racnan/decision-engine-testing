@@ -1,0 +1,55 @@
+# Configuration optimizing only the success_rate_delta parameter
+experiment:
+  name: "SR_Delta_Optimization"
+  output_csv: "success_rate_delta_results.csv"
+
+  constants_file:
+    path: "/Users/riddhi.agrawal/JuspayRepos/rust-backend/decision-engine/src/decider/gatewaydecider/super_router_constants.json"
+    section: "sr_cost_routing_constants"
+
+trials:
+  startup: 10 # Minimal startup trials for quick testing
+  total: 30 # Minimal total trials for quick testing
+  parallel_jobs: 2
+
+objectives:
+  success_rate: "maximize"
+  missed_savings: "minimize"
+
+  aggregation:
+    success_rate: "mean"
+    missed_savings: "mean"
+
+baseline:
+  parameters:
+    success_rate_delta: 0.01
+
+  results:
+    - dataset: "scene-1"
+      success_rate: 98.10666667
+      missed_savings: 1.67
+
+    - dataset: "scene-2"
+      success_rate: 96.42666667
+      missed_savings: 1.67
+
+    - dataset: "scene-3"
+      success_rate: 94.45333333
+      missed_savings: 1.0
+
+    - dataset: "scene-4"
+      success_rate: 93.33333333
+      missed_savings: 0.0
+
+    - dataset: "scene-5"
+      success_rate: 87.72
+      missed_savings: 0.0
+
+parameters:
+  # Only success_rate_delta parameter
+  - name: "success_rate_delta"
+    type: "float"
+    precision: 2
+    range:
+      low: 0.01
+      high: 0.50
