@@ -100,23 +100,95 @@ def validate_scene(scene_folder):
     
     return missing_files
 
+def parse_scene_selection(input_str, available_scenes):
+    """Parse user input for scene selection"""
+    input_str = input_str.strip().lower()
+    
+    # Handle 'all' keyword
+    if input_str == 'all':
+        return available_scenes
+    
+    selected_scenes = []
+    
+    # Split by comma for multiple selections
+    parts = [part.strip() for part in input_str.split(',')]
+    
+    for part in parts:
+        if '-' in part and len(part.split('-')) == 2:
+            # Handle range notation (e.g., "1-3")
+            try:
+                start, end = part.split('-')
+                start_num = int(start)
+                end_num = int(end)
+                
+                if start_num > end_num:
+                    raise ValueError(f"Invalid range: {part} (start > end)")
+                
+                for i in range(start_num, end_num + 1):
+                    scene_name = f"scene-{i}"
+                    if scene_name in available_scenes and scene_name not in selected_scenes:
+                        selected_scenes.append(scene_name)
+                        
+            except ValueError as e:
+                raise ValueError(f"Invalid range format: {part}")
+        else:
+            # Handle individual scene numbers
+            try:
+                scene_num = int(part)
+                scene_name = f"scene-{scene_num}"
+                if scene_name in available_scenes:
+                    if scene_name not in selected_scenes:
+                        selected_scenes.append(scene_name)
+                else:
+                    raise ValueError(f"Scene {scene_name} not found")
+            except ValueError:
+                raise ValueError(f"Invalid scene number: {part}")
+    
+    # Sort scenes by number for consistent ordering
+    scene_numbers = []
+    for scene in selected_scenes:
+        try:
+            num = int(scene.split('-')[1])
+            scene_numbers.append((num, scene))
+        except (ValueError, IndexError):
+            scene_numbers.append((999, scene))  # Fallback for unusual names
+    
+    scene_numbers.sort()
+    return [scene for _, scene in scene_numbers]
+
 def get_user_inputs(available_scenes):
     """Collect user inputs for simulation parameters"""
     print(f"\nAvailable scenes: {', '.join(available_scenes)}")
     
-    # Get number of scenes to run
+    # Get scene selection with flexible input
     while True:
+        print("\nScene Selection Options:")
+        print("  • Specific scenes: 2,3 (comma-separated)")
+        print("  • Range: 1-3 (inclusive range)")
+        print("  • All scenes: all")
+        print("  • Single scene: 2")
+        
         try:
-            max_scenes = len(available_scenes)
-            num_scenes = int(input(f"Enter number of scenes to be run (1-{max_scenes}): "))
-            if 1 <= num_scenes <= max_scenes:
-                break
-            else:
-                print(f"Please enter a number between 1 and {max_scenes}")
-        except ValueError:
-            print("Please enter a valid number")
-    
-    selected_scenes = available_scenes[:num_scenes]
+            scene_input = input("Enter scenes to run: ").strip()
+            if not scene_input:
+                print("Please enter a valid selection")
+                continue
+                
+            selected_scenes = parse_scene_selection(scene_input, available_scenes)
+            
+            if not selected_scenes:
+                print("No valid scenes selected. Please try again.")
+                continue
+                
+            print(f"Selected scenes: {', '.join(selected_scenes)}")
+            break
+            
+        except ValueError as e:
+            print(f"Error: {e}")
+            print("Please try again with a valid format")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            print("Please try again")
     
     # Validate selected scenes
     print(f"\nValidating scenes...")
