@@ -25,7 +25,7 @@ schema:
       generator: "random_choice"
       params:
         primary_values: ["CARD", "WALLET"]
-        primary_weights: [1.0, 0.0]
+        primary_weights: [1.0, 0.0] 
 
     - generator: "conditional_generator"
       on_field: "payment_method_type"
@@ -38,8 +38,7 @@ schema:
               primary_weights: [0.5, 0.5]
 
               # The combination logic is defined but commented out for this scenario.
-              combinations:
-                [["VISA", "ACCEL", "STAR"], ["MASTERCARD", "ACCEL", "STAR"]]
+              combinations: [["VISA", "ACCEL","STAR"], ["MASTERCARD", "ACCEL","STAR"]]
               combination_weights: [0.5, 0.5]
               distribution_weights: [0.5, 0.5]
 
@@ -58,51 +57,16 @@ processors:
       supported_networks: ["VISA", "MASTERCARD"]
   - name: "Adyen"
     defaults:
-      success_rate: 0.98
-      supported_networks: ["VISA", "MASTERCARD", "ACCEL", "STAR"]
-  # - name: "PayPal"
-  #   defaults:
-  #     success_rate: 0.94
-  #     supported_networks: []
+      success_rate: 0.96
+      supported_networks: ["VISA", "MASTERCARD","ACCEL","STAR"]
+
+  - name: "Checkout"
+    defaults:
+      success_rate: 0.94
+      supported_networks: ["VISA", "MASTERCARD","ACCEL","STAR"]
+
 # This is empty because the default state already matches the scenario we want to test.
 event_schedule:
-  - transaction_range: [1, 10]
-    success_rate: 0.08
+  - transaction_range: [500, 800]
+    success_rate: 0.0
     processors: ["Stripe"]
-    payment_method_type:
-      "CARD":
-        - name: "payment_method"
-          values: ["VISA", "ACCEL"]
-      "WALLET":
-        - name: "payment_method"
-          values: ["Venmo"]
-    amount:
-      lt: 100
-
-  - transaction_range: [100, 200]
-    success_rate: 0.0
-    processors: ["Adyen"]
-
-    - transaction_range: [100, 200]
-      success_rate: 0.0
-      processors: ["Adyen"]
-
-    - transaction_range: [300, 350]
-      success_rate: 0.0
-      processors: ["Adyen"]
-      payment_method_type:
-        "CARD":
-          - name: "payment_method"
-            values: ["STAR"]
-
-    - transaction_range: [400, 425] # Assuming num_transactions is 500
-      success_rate: 0.0
-      amount:
-        gt: 950
-
-  - transaction_range: [25, 50]
-    success_rate: 0.0
-    payment_method_type:
-      "CARD":
-      - name: "payment_method"
-        values: ["ACCEL"]
