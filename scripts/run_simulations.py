@@ -433,7 +433,7 @@ def main():
 
     # Construct the full, absolute paths for the input and output files.
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    input_csv_path = os.path.join(project_root, config["simulation"]["output_csv_path"])
+    input_csv_path = os.path.join(project_root, scene_folder, "transactions.csv")
     output_csv_path = os.path.join(project_root, output_dir, "output_results.csv")
 
     # Check if the input CSV file from the generator script actually exists.
