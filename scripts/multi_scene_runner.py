@@ -30,7 +30,8 @@ REDIS_CONFIG = {
     'port': 6379,
     'socket_connect_timeout': 30,
     'socket_timeout': 10,
-    'retry_on_timeout': True,
+    # 'retry_on_timeout' parameter is deprecated since Redis-py 6.0.0
+    # It's included by default now, so we've removed it
     'decode_responses': True
 }
 
@@ -251,7 +252,7 @@ def execute_simulation(scene_folder, run_dir, algorithm):
         ]
         
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        
+            
         if result.returncode == 0:
             return True, None
         else:

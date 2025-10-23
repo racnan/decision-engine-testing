@@ -25,7 +25,7 @@ DECISION_ENGINE_URL = "http://localhost:8080/decide-gateway"
 # The URL for the API that we send feedback to after a simulated transaction.
 FEEDBACK_API_URL = "http://localhost:8080/update-gateway-score"
 # A throttle to limit how many requests we make per second, to avoid overwhelming the server.
-REQUESTS_PER_SECOND = 10
+REQUESTS_PER_SECOND = 8
 
 # This is a Python dictionary that maps card network combinations to a specific
 # 'cardIsin' number required by the API.

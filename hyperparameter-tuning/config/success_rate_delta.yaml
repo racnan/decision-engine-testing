@@ -1,6 +1,6 @@
 # Configuration optimizing only the success_rate_delta parameter
 experiment:
-  name: "SR_Delta_Optimization"
+  name: "delta_based"
   output_csv: "success_rate_delta_results.csv"
 
   constants_file:
@@ -8,8 +8,8 @@ experiment:
     section: "sr_cost_routing_constants"
 
 trials:
-  startup: 10 # Minimal startup trials for quick testing
-  total: 30 # Minimal total trials for quick testing
+  startup: 5 # Minimal startup trials for quick testing
+  total: 15 # Minimal total trials for quick testing
   parallel_jobs: 2
 
 objectives:
