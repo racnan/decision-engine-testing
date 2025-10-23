@@ -171,7 +171,7 @@ def send_feedback(processor, outcome, payment_id, network):
     }
     try:
         print(f"  -> Sending feedback for '{processor}' on network '{network}', outcome: '{outcome}'.")
-        response = requests.post(FEEDBACK_API_URL, json=feedback_payload, timeout=2)
+        response = requests.post(FEEDBACK_API_URL, json=feedback_payload, timeout=10)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         print(f"FATAL: Feedback API call failed for gateway {processor}: {e}")
