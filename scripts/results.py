@@ -261,11 +261,7 @@ def analyze_results(input_file=None, output_dir=None, return_metrics=False):
             "missed_savings_success": missed_savings_success,
             "best_possible_savings_fail": best_possible_savings_fail,
             "total_missed_savings": total_missed_savings,
-            "success_rate": (
-                successful_transactions / total_transactions
-                if total_transactions > 0
-                else 0
-            ),
+            "success_rate": overall_success_rate,
         }
     return None
 

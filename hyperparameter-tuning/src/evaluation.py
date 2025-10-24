@@ -138,7 +138,7 @@ def evaluate_parameters_on_scenes(
     params: Dict[str, float],
     config: BOConfig,
     black_box_func: Union[Callable, str, None] = None,
-    num_scenes: int = 8,
+    num_scenes: int = 20,
     runs_per_scene: int = 1,
     algorithm: str = "euclidean",
 ) -> Dict[str, Dict[str, float]]:
@@ -217,14 +217,16 @@ def evaluate_parameters_on_scenes(
             process = subprocess.run(
                 command, shell=True, capture_output=True, text=True, check=False
             )
-            
+
             # Print any stderr output for debugging
             if process.stderr:
                 print("\nDEBUG - Command stderr output:")
                 print(process.stderr)
-                
+
             if process.returncode != 0:
-                print(f"WARNING: Command exited with code {process.returncode}. Continuing anyway.")
+                print(
+                    f"WARNING: Command exited with code {process.returncode}. Continuing anyway."
+                )
             else:
                 print("\n" + "=" * 80)
                 print("EVALUATION COMPLETE")
@@ -256,27 +258,29 @@ def evaluate_parameters_on_scenes(
                 print(f"Analyzing results for {scene}...")
                 # Use analyze_results directly from results.py with return_metrics=True
                 metrics = analyze_results(output_file, return_metrics=True)
-                
+
                 # Our metrics dict now has all the data we need in the exact same format as results.py
                 # Convert success_rate to 0.97 when it's 0.9716, to match what's in detailed_performance_report.txt
                 # We use integer division to ensure we get exactly 0.97 for 97.16%
-                success_rate = int(metrics["success_rate"] * 100) / 100
-                
+                success_rate = metrics["success_rate"] / 100
+
                 scene_metrics = {
                     "success_rate": success_rate,
-                    "missed_savings": metrics["total_missed_savings"]
+                    "missed_savings": metrics["missed_savings_success"],
                 }
 
                 results[scene] = scene_metrics
                 print(
                     f"{scene} metrics: success_rate={success_rate*100:.2f}%, missed_savings=${metrics['total_missed_savings']:.2f}"
                 )
-                print(f"  - Raw success rate: {metrics['success_rate']*100:.2f}% → {success_rate*100:.2f}%")
+                print(
+                    f"  - Raw success rate: {metrics['success_rate']*100:.2f}% → {success_rate*100:.2f}%"
+                )
                 print(f"  - Using exact data from: {output_file}")
             else:
                 print(f"Warning: Results file not found for {scene}")
                 # Default metrics in case file is not found
-                results[scene] = {"success_rate": 0.90, "missed_savings": 10.0}
+                results[scene] = {"success_rate": 0, "missed_savings": 0}
 
         return results
 

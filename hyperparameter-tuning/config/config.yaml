@@ -9,7 +9,7 @@ experiment:
 
 trials:
   startup: 5 # Increased from 10 for better initial exploration
-  total: 15 # Increased from 25 for more trials
+  total: 30 # Increased from 25 for more trials
   parallel_jobs: 2
 
 objectives:

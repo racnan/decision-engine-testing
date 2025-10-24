@@ -79,26 +79,24 @@ event_schedule:
     amount:
       lt: 100
 
-  - transaction_range: [100, 200]
+   - transaction_range: [300, 350]
     success_rate: 0.0
     processors: ["Adyen"]
+    payment_method_type:
+      "CARD":
+      - name: "payment_method"
+        values: ["STAR"]
 
-    - transaction_range: [100, 200]
-      success_rate: 0.0
-      processors: ["Adyen"]
-
-    - transaction_range: [300, 350]
-      success_rate: 0.0
-      processors: ["Adyen"]
-      payment_method_type:
-        "CARD":
-          - name: "payment_method"
-            values: ["STAR"]
-
-    - transaction_range: [400, 425] # Assuming num_transactions is 500
+  - transaction_range: [400, 425] # Assuming num_transactions is 500
       success_rate: 0.0
       amount:
         gt: 950
+
+  - transaction_range: [450, 500]
+      success_rate: 0.0
+      amount:
+        gt: 500
+        lt: 50
 
   - transaction_range: [25, 50]
     success_rate: 0.0
