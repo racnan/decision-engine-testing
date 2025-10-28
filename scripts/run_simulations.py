@@ -23,7 +23,12 @@ DECISION_ENGINE_URL = "http://localhost:8080/decide-gateway"
 # The URL for the API that we send feedback to after a simulated transaction.
 FEEDBACK_API_URL = "http://localhost:8080/update-gateway-score"
 # A throttle to limit how many requests we make per second, to avoid overwhelming the server.
-REQUESTS_PER_SECOND = 20
+REQUESTS_PER_SECOND = 5
+# Batch processing configuration
+BATCH_SIZE = 100  # Add delay every 100 transactions
+BATCH_DELAY = 5   # 5 second pause between batches
+SERVICE_RECOVERY_DELAY = 30  # Wait 30 seconds between service recovery attempts
+MAX_RECOVERY_ATTEMPTS = 10   # Maximum attempts to recover from service failure
 
 # This is a Python dictionary that maps card network combinations to a specific
 # 'cardIsin' number required by the API.
@@ -156,10 +161,10 @@ def prepare_api_payload(csv_row, line_number, config, algorithm="SUPER_ROUTER"):
 
     return payload
 
-def send_feedback(processor, outcome, payment_id, network):
-    """Sends feedback for a single, simulated transaction attempt."""
+def send_feedback(processor, outcome, payment_id, network, transaction_num=None):
+    """Sends feedback for a single, simulated transaction attempt with enhanced error handling."""
     if not processor or not network:
-        return
+        return True
 
     feedback_payload = {
         "merchantId": "m3",
@@ -169,14 +174,35 @@ def send_feedback(processor, outcome, payment_id, network):
         "paymentMethod": network.upper(),
         "txnLatency": {"gatewayLatency": random.randint(150, 6000)}
     }
-    try:
-        print(f"  -> Sending feedback for '{processor}' on network '{network}', outcome: '{outcome}'.")
-        response = requests.post(FEEDBACK_API_URL, json=feedback_payload, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        print(f"FATAL: Feedback API call failed for gateway {processor}: {e}")
-        print("Terminating session due to feedback API error.")
-        sys.exit(1)
+    
+    max_feedback_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_feedback_retries:
+        try:
+            print(f"  -> Sending feedback for '{processor}' on network '{network}', outcome: '{outcome}'.")
+            response = requests.post(FEEDBACK_API_URL, json=feedback_payload, timeout=50)
+            response.raise_for_status()
+            return True
+            
+        except requests.exceptions.RequestException as e:
+            # Use enhanced error handling for feedback API calls
+            should_continue = handle_api_error(e, "feedback-api", transaction_num or "unknown")
+            
+            if should_continue:
+                # Service recovered, retry feedback
+                retry_count += 1
+                if retry_count < max_feedback_retries:
+                    print(f"     Retrying feedback for {processor} (attempt {retry_count + 1}/{max_feedback_retries})...")
+                else:
+                    print(f"     Max feedback retries exceeded for {processor}")
+                    print("     WARNING: Feedback failed but continuing simulation...")
+                    return False
+            else:
+                print(f"     WARNING: Feedback API error for {processor}, but continuing simulation...")
+                return False
+    
+    return False
 
 def check_service_health():
     """
@@ -244,6 +270,111 @@ def check_service_health():
         print("  - Service compatibility problems")
         print("  - System resource constraints")
         sys.exit(1)
+
+def detect_service_health_silent():
+    """
+    Silent health check for use during simulation recovery.
+    Returns True if service is healthy, False otherwise.
+    """
+    test_payload = {
+        "merchantId": "m3",
+        "eligibleGatewayList": ["test_gateway"],
+        "rankingAlgorithm": "SUPER_ROUTER",
+        "eliminationEnabled": True,
+        "paymentInfo": {
+            "paymentId": "health_check_recovery",
+            "amount": 100.0,
+            "currency": "USD",
+            "customerId": "c1",
+            "paymentMethodType": "CARD",
+            "paymentMethod": "VISA",
+            "paymentType": "ORDER_PAYMENT"
+        }
+    }
+    
+    try:
+        response = requests.post(DECISION_ENGINE_URL, json=test_payload, timeout=5)
+        response.raise_for_status()
+        return True
+    except:
+        return False
+
+def wait_for_service_recovery(transaction_num):
+    """
+    Wait for the Decision Engine service to recover from a failure.
+    Returns True if service recovered, False if max attempts exceeded.
+    """
+    print(f"\n⚠️  SERVICE RECOVERY: Decision Engine appears to be down at transaction {transaction_num}")
+    print("     Attempting to wait for service recovery...")
+    
+    for attempt in range(1, MAX_RECOVERY_ATTEMPTS + 1):
+        print(f"     Recovery attempt {attempt}/{MAX_RECOVERY_ATTEMPTS}: Checking service health...", end=" ")
+        
+        if detect_service_health_silent():
+            print("✓ Service recovered!")
+            print("     Resuming simulation...")
+            return True
+        else:
+            print("✗ Still down")
+            if attempt < MAX_RECOVERY_ATTEMPTS:
+                print(f"     Waiting {SERVICE_RECOVERY_DELAY} seconds before next attempt...")
+                time.sleep(SERVICE_RECOVERY_DELAY)
+    
+    print(f"\n✗ FATAL: Service did not recover after {MAX_RECOVERY_ATTEMPTS} attempts")
+    print("     Manual intervention required - please check Decision Engine service status")
+    return False
+
+def handle_api_error(error, endpoint, transaction_num):
+    """
+    Enhanced error handling that distinguishes between connection failures and other errors.
+    Returns True if simulation should continue, False if it should terminate.
+    """
+    error_type = type(error).__name__
+    
+    # Check if this is a connection-related error (service crash/unavailability)
+    if isinstance(error, requests.exceptions.ConnectionError):
+        print(f"\n🔄 CONNECTION FAILURE at transaction {transaction_num}:")
+        print(f"     Error: {error}")
+        print("     This indicates the Decision Engine service has stopped or crashed.")
+        
+        # Attempt service recovery
+        if wait_for_service_recovery(transaction_num):
+            return True  # Continue simulation
+        else:
+            return False  # Terminate simulation
+    
+    # Handle timeout errors
+    elif isinstance(error, requests.exceptions.Timeout):
+        print(f"\n⏱️  TIMEOUT ERROR at transaction {transaction_num}:")
+        print(f"     Error: {error}")
+        print("     Service is responding slowly but may still be operational.")
+        print("     Terminating to prevent further service overload.")
+        return False
+    
+    # Handle HTTP errors (4xx, 5xx)
+    elif isinstance(error, requests.exceptions.HTTPError):
+        print(f"\n🚫 HTTP ERROR at transaction {transaction_num}:")
+        print(f"     Error: {error}")
+        print("     Service returned an error response.")
+        return False
+    
+    # Handle other request errors
+    else:
+        print(f"\n❌ API ERROR at transaction {transaction_num}:")
+        print(f"     Error type: {error_type}")
+        print(f"     Error: {error}")
+        return False
+
+def add_batch_delay(transaction_num):
+    """
+    Add delay between batches to prevent service overload.
+    """
+    if transaction_num > 1 and (transaction_num - 1) % BATCH_SIZE == 0:
+        batch_number = (transaction_num - 1) // BATCH_SIZE
+        print(f"\n📦 BATCH {batch_number} COMPLETE ({BATCH_SIZE} transactions)")
+        print(f"     Adding {BATCH_DELAY}s delay to prevent service overload...", end=" ")
+        time.sleep(BATCH_DELAY)
+        print("✓ Resuming")
 
 def analyze_decision_and_run_simulation(decision, csv_row, payment_id, config):
     """
@@ -406,80 +537,73 @@ def main():
 
             # This is the main loop. It will iterate over every row in the input CSV.
             for row in reader:
+                # Enhanced progress reporting with batch information
                 if reader.line_num % 500 == 0:
                     print(f"  ...processing transaction {reader.line_num}")
-
-                try:
-                    # Step 1: Prepare the payload for the API call.
-                    api_payload = prepare_api_payload(row, reader.line_num, config, algorithm)
-
-                    # Step 2: Call the decision engine API.
-                    response = requests.post(DECISION_ENGINE_URL, json=api_payload, timeout=5)
-                    response.raise_for_status()
-                    decision = response.json()
-
-                    # DEBUG: Print the request and response for the first two transactions.
-                    if reader.line_num in [2, 3]: # The first data row is line 2
-                        print("\n--- DEBUG: REQUEST/RESPONSE --- ")
-                        print(f"Transaction #{reader.line_num - 1}")
-                        print("REQUEST to /decide-gateway:")
-                        print(api_payload)
-                        print("RESPONSE from /decide-gateway:")
-                        print(decision)
-                        print("--- END DEBUG ---\n")
-
-                    # Step 3: Analyze the decision, simulate the transaction, and send feedback.
-                    payment_id = api_payload['paymentInfo']['paymentId']
-                    # simulation_results = analyze_decision_and_run_simulation(decision, row, payment_id, config)
-                    (chosen_gateway, pre_determined_outcome, payment_id, chosen_network, simulation_results) = analyze_decision_and_run_simulation(decision, row, payment_id, config)
-
-                    send_feedback(chosen_gateway, "PENDING_VBV", payment_id, chosen_network)   
-                    send_feedback(chosen_gateway, pre_determined_outcome, payment_id, chosen_network)                    
-
-                except requests.exceptions.ConnectionError as e:
-                    print(f"FATAL: ✗ Cannot connect to Decision Engine during transaction {reader.line_num}: {e}")
-                    print("POSSIBLE CAUSES:")
-                    print("  - Decision Engine service stopped during execution")
-                    print("  - Network connection lost")
-                    print("  - Service crashed or restarted")
-                    print("Terminating session due to connection failure.")
-                    sys.exit(1)
                 
-                except requests.exceptions.Timeout as e:
-                    print(f"FATAL: ✗ Decision Engine timeout on transaction {reader.line_num}: {e}")
-                    print("POSSIBLE CAUSES:")
-                    print("  - Service overloaded or unresponsive")
-                    print("  - Network latency issues")
-                    print("  - Service performance degradation")
-                    print("Terminating session due to timeout.")
-                    sys.exit(1)
+                # Add batch delays to prevent service overload
+                add_batch_delay(reader.line_num)
+
+                # Set flag for retry logic (in case of service recovery)
+                retry_transaction = True
+                max_retries = 3
+                retry_count = 0
                 
-                except requests.exceptions.HTTPError as e:
-                    print(f"FATAL: ✗ Decision Engine HTTP error on transaction {reader.line_num}: {e}")
-                    print("POSSIBLE CAUSES:")
-                    print("  - 4xx: Invalid request payload or authentication issues")
-                    print("  - 5xx: Service internal errors or configuration problems")
-                    print("  - API contract changes or incompatibilities")
-                    print("Terminating session due to HTTP error.")
-                    sys.exit(1)
-                
-                except requests.exceptions.RequestException as e:
-                    print(f"FATAL: ✗ Unexpected API error on transaction {reader.line_num}: {e}")
-                    print("POSSIBLE CAUSES:")
-                    print("  - Unknown network or protocol issues")
-                    print("  - Service compatibility problems")
-                    print("  - System resource constraints")
-                    print("Terminating session due to API error.")
-                    sys.exit(1)
-                
-                except (ValueError, SyntaxError) as e:
-                    print(f"FATAL: ✗ Data processing error on transaction {reader.line_num}: {e}")
-                    print("POSSIBLE CAUSES:")
-                    print("  - Invalid CSV data format")
-                    print("  - Configuration file issues")
-                    print("  - Data corruption or format changes")
-                    print("Terminating session due to data processing error.")
-                    sys.exit(1)
+                while retry_transaction and retry_count < max_retries:
+                    try:
+                        # Step 1: Prepare the payload for the API call.
+                        api_payload = prepare_api_payload(row, reader.line_num, config, algorithm)
+
+                        # Step 2: Call the decision engine API.
+                        response = requests.post(DECISION_ENGINE_URL, json=api_payload, timeout=50)
+                        response.raise_for_status()
+                        decision = response.json()
+
+                        # DEBUG: Print the request and response for the first two transactions.
+                        if reader.line_num in [2, 3]: # The first data row is line 2
+                            print("\n--- DEBUG: REQUEST/RESPONSE --- ")
+                            print(f"Transaction #{reader.line_num - 1}")
+                            print("REQUEST to /decide-gateway:")
+                            print(api_payload)
+                            print("RESPONSE from /decide-gateway:")
+                            print(decision)
+                            print("--- END DEBUG ---\n")
+
+                        # Step 3: Analyze the decision, simulate the transaction, and send feedback.
+                        payment_id = api_payload['paymentInfo']['paymentId']
+                        (chosen_gateway, pre_determined_outcome, payment_id, chosen_network, simulation_results) = analyze_decision_and_run_simulation(decision, row, payment_id, config)
+
+                        send_feedback(chosen_gateway, "PENDING_VBV", payment_id, chosen_network, reader.line_num)   
+                        send_feedback(chosen_gateway, pre_determined_outcome, payment_id, chosen_network, reader.line_num)
+
+                        # If we reach here, the transaction succeeded
+                        retry_transaction = False
+
+                    except requests.exceptions.RequestException as e:
+                        # Use enhanced error handling
+                        should_continue = handle_api_error(e, "decision-engine", reader.line_num)
+                        
+                        if should_continue:
+                            # Service recovered, retry this transaction
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                print(f"     Retrying transaction {reader.line_num} (attempt {retry_count + 1}/{max_retries})...")
+                            else:
+                                print(f"     Max retries exceeded for transaction {reader.line_num}")
+                                sys.exit(1)
+                        else:
+                            # Permanent failure, terminate simulation
+                            print("Terminating simulation due to unrecoverable error.")
+                            sys.exit(1)
+                    
+                    except (ValueError, SyntaxError) as e:
+                        print(f"FATAL: ✗ Data processing error on transaction {reader.line_num}: {e}")
+                        print("POSSIBLE CAUSES:")
+                        print("  - Invalid CSV data format")
+                        print("  - Configuration file issues")
+                        print("  - Data corruption or format changes")
+                        print("Terminating session due to data processing error.")
+                        sys.exit(1)
                 
                 # Step 4: Add the simulation results to the original row data.
                 row.update(simulation_results)

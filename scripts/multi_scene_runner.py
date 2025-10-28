@@ -34,6 +34,10 @@ REDIS_CONFIG = {
     'decode_responses': True
 }
 
+# Load management configuration
+DELAY_BETWEEN_RUNS = 10    # 10 seconds between runs within a scene
+DELAY_BETWEEN_SCENES = 30  # 30 seconds between different scenes
+
 def setup_redis_connection():
     """Initialize Redis connection with service config"""
     try:
@@ -250,7 +254,7 @@ def execute_simulation(scene_folder, run_dir, algorithm):
             '--algorithm', algorithm
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode == 0:
             return True, None
@@ -258,7 +262,7 @@ def execute_simulation(scene_folder, run_dir, algorithm):
             return False, result.stderr or result.stdout
             
     except subprocess.TimeoutExpired:
-        return False, "Simulation timed out after 5 minutes"
+        return False, "Simulation timed out (no timeout set - this should not happen)"
     except Exception as e:
         return False, str(e)
 
@@ -495,6 +499,13 @@ def main():
                 generate_run_reports(scene_folder, run_dir)
                 print("✓")
                 print(f"  → Run {run_num} COMPLETE")
+                
+                # Add delay between runs (except after the last run)
+                if run_num < num_runs:
+                    print(f"  → Adding {DELAY_BETWEEN_RUNS}s delay before next run...", end=" ")
+                    import time
+                    time.sleep(DELAY_BETWEEN_RUNS)
+                    print("✓")
             else:
                 print("✗")
                 print(f"  → Error: {error}")
@@ -509,6 +520,13 @@ def main():
         
         scene_success = scene_results['successful_runs']
         print(f"  Scene Summary: {scene_success}/{num_runs} runs successful")
+        
+        # Add delay between scenes (except after the last scene)
+        if scene_idx < len(selected_scenes):
+            print(f"\n🔄 Adding {DELAY_BETWEEN_SCENES}s delay before next scene to allow service recovery...", end=" ")
+            import time
+            time.sleep(DELAY_BETWEEN_SCENES)
+            print("✓")
     
     # Print final summary
     print_cross_scene_summary(all_scene_results, algorithm)
