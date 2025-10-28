@@ -1,0 +1,14 @@
+{
+  "experiment": "delta_based",
+  "timestamp": "2025-10-29T01:31:22.705069",
+  "config_file": "config/success_rate_delta.yaml",
+  "constants_file": {
+    "path": "/Users/apoorv.dixit/Desktop/decision-engine/super_router_constants.json",
+    "section": "sr_cost_routing_constants"
+  },
+  "best_parameters": {
+    "success_rate_delta": 0.12
+  },
+  "score": 0.0,
+  "iteration": 0
+}
