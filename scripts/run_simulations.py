@@ -178,10 +178,17 @@ def send_feedback(processor, outcome, payment_id, network, session=None):
     if not processor or not network:
         return
 
+    if outcome == "success":
+        outcome = "AUTHORIZED"
+    elif outcome == "PENDING_VBV":
+        pass  # outcome is already 'PENDING_VBV'
+    else:
+        outcome = "FAILURE"
+
     feedback_payload = {
         "merchantId": "m3",
         "gateway": processor,
-        "status": "AUTHORIZED" if outcome == "success" else "FAILURE",
+        "status": outcome,
         "paymentId": payment_id,
         "paymentMethod": network.upper(),
         "txnLatency": {"gatewayLatency": random.randint(150, 6000)},
