@@ -173,8 +173,7 @@ def prepare_api_payload(csv_row, line_number, config, algorithm="SUPER_ROUTER"):
 
     return payload
 
-
-def send_feedback(processor, outcome, payment_id, network):
+def send_feedback(processor, outcome, payment_id, network, session=None):
     """Sends feedback for a single, simulated transaction attempt."""
     if not processor or not network:
         return
@@ -187,24 +186,28 @@ def send_feedback(processor, outcome, payment_id, network):
         "paymentMethod": network.upper(),
         "txnLatency": {"gatewayLatency": random.randint(150, 6000)},
     }
+    
+    # Use the provided session, or fallback to requests module
+    requester = session if session else requests
+
     try:
-        print(
-            f"  -> Sending feedback for '{processor}' on network '{network}', outcome: '{outcome}'."
-        )
-        response = requests.post(FEEDBACK_API_URL, json=feedback_payload, timeout=10)
+        print(f"  -> Sending feedback for '{processor}' on network '{network}', outcome: '{outcome}'.")
+        response = requester.post(FEEDBACK_API_URL, json=feedback_payload, timeout=10)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         print(f"FATAL: Feedback API call failed for gateway {processor}: {e}")
         print("Terminating session due to feedback API error.")
         sys.exit(1)
 
-
-def check_service_health():
+def check_service_health(session=None):
     """
     Performs a pre-flight health check to ensure the Decision Engine service
     is running and responding before processing any transactions.
     """
     print("INFO: Performing service health check...")
+    
+    # Use the provided session, or fallback to requests module
+    requester = session if session else requests
 
     # Create a minimal test payload to verify service availability
     test_payload = {
@@ -225,7 +228,7 @@ def check_service_health():
 
     try:
         print(f"INFO: Testing connection to {DECISION_ENGINE_URL}...")
-        response = requests.post(DECISION_ENGINE_URL, json=test_payload, timeout=10)
+        response = requester.post(DECISION_ENGINE_URL, json=test_payload, timeout=10)
         response.raise_for_status()
         print("INFO: ✓ Service health check passed - Decision Engine is responding")
         return True
@@ -422,8 +425,11 @@ def main():
     print(f"INFO: Starting simulation runner script for {scene_folder}...")
     print(f"INFO: Using algorithm: {algorithm}")
 
+    # Create a single session object for connection pooling
+    session = requests.Session()
+
     # Perform service health check before any processing
-    check_service_health()
+    check_service_health(session)
 
     # Load the configuration from the YAML file first.
     config = load_config(config_path)
@@ -485,10 +491,8 @@ def main():
                         row, reader.line_num, config, algorithm
                     )
 
-                    # Step 2: Call the decision engine API.
-                    response = requests.post(
-                        DECISION_ENGINE_URL, json=api_payload, timeout=5
-                    )
+                    # Step 2: Call the decision engine API using the session object.
+                    response = session.post(DECISION_ENGINE_URL, json=api_payload, timeout=5)
                     response.raise_for_status()
                     decision = response.json()
 
@@ -515,15 +519,8 @@ def main():
                         decision, row, payment_id, config
                     )
 
-                    send_feedback(
-                        chosen_gateway, "PENDING_VBV", payment_id, chosen_network
-                    )
-                    send_feedback(
-                        chosen_gateway,
-                        pre_determined_outcome,
-                        payment_id,
-                        chosen_network,
-                    )
+                    send_feedback(chosen_gateway, "PENDING_VBV", payment_id, chosen_network, session=session)   
+                    send_feedback(chosen_gateway, pre_determined_outcome, payment_id, chosen_network, session=session)                    
 
                 except requests.exceptions.ConnectionError as e:
                     print(
@@ -587,7 +584,7 @@ def main():
                 writer.writerow(row)
 
                 # Step 6: Pause the script for a short time to respect the REQUESTS_PER_SECOND limit.
-                time.sleep(1 / REQUESTS_PER_SECOND)
+                # time.sleep(1 / REQUESTS_PER_SECOND)
 
     except IOError as e:
         # This catches errors like not having permission to write the output file.
