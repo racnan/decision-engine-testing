@@ -1,8 +1,5 @@
 {
   "best_params": {
-    "sr_threshold": 0.9,
-    "spread_threshold": 0.2,
-    "alpha": 3.17,
-    "beta": 3.87
+    "success_rate_delta": 0.47
   }
 }

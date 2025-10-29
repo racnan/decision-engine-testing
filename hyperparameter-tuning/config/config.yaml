@@ -8,7 +8,6 @@ experiment:
     section: "sr_cost_routing_constants"
 
 trials:
-<<<<<<< Updated upstream
   startup: 3 # Increased from 10 for better initial exploration
   total: 10 # Increased from 25 for more trials
   parallel_jobs: 2
