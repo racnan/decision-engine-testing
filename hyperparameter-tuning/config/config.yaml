@@ -4,12 +4,13 @@ experiment:
   output_csv: "optimization_results.csv"
 
   constants_file:
-    path: "/Users/riddhi.agrawal/JuspayRepos/rust-backend/decision-engine/config/sr_cost_routing_constants.json"
+    path: "/Users/apoorv.dixit/Desktop/decision-engine/sr_cost_routing_constants.json"
     section: "sr_cost_routing_constants"
 
 trials:
-  startup: 5 # Increased from 10 for better initial exploration
-  total: 30 # Increased from 25 for more trials
+<<<<<<< Updated upstream
+  startup: 3 # Increased from 10 for better initial exploration
+  total: 10 # Increased from 25 for more trials
   parallel_jobs: 2
 
 objectives:
