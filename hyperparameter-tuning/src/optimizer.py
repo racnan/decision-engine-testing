@@ -81,11 +81,9 @@ class BayesianOptimizer:
         self.best_value = -np.inf  # Assuming maximization
         self.best_metrics = None
 
-        # Set balance weight for missed_savings in the objective function
-        # Smaller value = more weight on missed_savings
-        # Higher value = more weight on success_rate
-        # Updated to 80,000 based on actual data ranges (missed_savings: $0-$12,000, success_rate: 0-1)
-        self.missed_savings_weight = 80000.0
+        # Threshold-based business logic - no magic numbers needed
+        # Business rule: If SR >= (baseline_SR - 1%), optimize for cost
+        # Otherwise, keep current best result intact
 
     def _normalize_params(self, params: Dict[str, float]) -> np.ndarray:
         """
@@ -242,7 +240,7 @@ class BayesianOptimizer:
 
     def evaluate_and_update(self, params: Dict[str, float]) -> Dict[str, Any]:
         """
-        Evaluate a set of parameters and update the model.
+        Evaluate a set of parameters and update the model using threshold-based business logic.
 
         Args:
             params: Parameter dictionary to evaluate
@@ -258,45 +256,108 @@ class BayesianOptimizer:
         # Aggregate metrics according to config
         aggregated = aggregate_metrics(scene_metrics, self.config.aggregation_methods)
 
-        # Get metrics
-        success_rate = aggregated.get("success_rate", 0.0)
-        missed_savings = aggregated.get("missed_savings", 0.0)
+        # Get metrics with robust validation
+        success_rate = aggregated.get("success_rate")
+        missed_savings = aggregated.get("missed_savings")
 
-        # Create combined objective: maximize success_rate, minimize missed_savings
-        # We scale missed_savings to be comparable to success_rate
-        # Since we want to maximize the objective but minimize missed_savings,
-        # we subtract missed_savings from success_rate
-        objective_value = success_rate - (missed_savings / self.missed_savings_weight)
+        # HALT EXECUTION if we get invalid data
+        if success_rate is None or missed_savings is None or success_rate == 0.0:
+            print(f"🚨 CRITICAL ERROR: Invalid evaluation results!")
+            print(f"  Parameters: {params}")
+            print(f"  Success Rate: {success_rate}")
+            print(f"  Missed Savings: {missed_savings}")
+            print(f"  HALTING EXECUTION - Check evaluation system!")
+            raise SystemExit("Evaluation returned invalid results. Check system configuration.")
 
-        print(
-            f"Success Rate: {success_rate:.2f}, Missed Savings: ${missed_savings:.2f}"
-        )
-        print(
-            f"Combined Objective: {success_rate:.2f} - ({missed_savings:.2f} / {self.missed_savings_weight}) = {objective_value:.2f}"
-        )
-
-        # Normalize parameters
-        x_norm = self._normalize_params(params)
-
-        # Store data
-        self.X_sample.append(x_norm)
-        self.X_params.append(params)
-        self.y_sample.append(objective_value)
-        self.metrics.append(
-            {"params": params, "scene_metrics": scene_metrics, "aggregated": aggregated}
-        )
-
-        # Update best result based on combined objective
-        if objective_value > self.best_value:
-            self.best_value = objective_value
-            self.best_params = params.copy()
+        # Establish baseline SR from first run (preferably delta=0.0)
+        if not hasattr(self, 'baseline_success_rate'):
+            if params.get('success_rate_delta', 0) == 0.0:
+                self.baseline_success_rate = success_rate
+                self.best_success_rate = success_rate
+                self.best_missed_savings = missed_savings
+                self.best_params = params.copy()
+                print(f"✓ BASELINE ESTABLISHED: delta=0.0 → SR={success_rate:.4f}, Missed=${missed_savings:.2f}")
+            else:
+                # Handle case where first run isn't delta=0.0
+                print(f"⚠️ WARNING: First run delta={params.get('success_rate_delta', 0):.3f} ≠ 0.0")
+                print(f"  Using as baseline anyway...")
+                self.baseline_success_rate = success_rate
+                self.best_success_rate = success_rate
+                self.best_missed_savings = missed_savings
+                self.best_params = params.copy()
+                print(f"✓ BASELINE ESTABLISHED: SR={success_rate:.4f}, Missed=${missed_savings:.2f}")
+            
+            # Initialize best metrics for JSON saving
             self.best_metrics = {
                 "scene_metrics": scene_metrics,
                 "aggregated": aggregated,
             }
-
-            # Save the best parameters to JSON whenever we find a better result
+            self.best_value = 0.0  # Initialize for compatibility
+            
+            # Save initial best
             self._save_best_params_to_json()
+            
+            # Normalize parameters for GP
+            x_norm = self._normalize_params(params)
+            self.X_sample.append(x_norm)
+            self.X_params.append(params)
+            self.y_sample.append(0.0)  # Baseline gets neutral score
+            self.metrics.append({
+                "params": params, 
+                "scene_metrics": scene_metrics, 
+                "aggregated": aggregated
+            })
+            
+            return {
+                "params": params,
+                "scene_metrics": scene_metrics,
+                "aggregated": aggregated,
+            }
+
+        # Business logic for subsequent trials
+        threshold = self.baseline_success_rate - 0.01
+        
+        if success_rate >= threshold:
+            # COST MODE: Within 1% of baseline SR - optimize for cost savings
+            if missed_savings < self.best_missed_savings:
+                # New best result - better cost savings
+                self.best_success_rate = success_rate
+                self.best_missed_savings = missed_savings
+                self.best_params = params.copy()
+                self.best_metrics = {
+                    "scene_metrics": scene_metrics,
+                    "aggregated": aggregated,
+                }
+                self.best_value = -missed_savings  # Use negative for GP compatibility
+                result = "NEW BEST (Better cost savings)"
+                self._save_best_params_to_json()
+            else:
+                result = "No improvement (cost mode)"
+            objective_value = -missed_savings  # Negative for GP (lower missed_savings = higher value)
+        else:
+            # BELOW THRESHOLD: SR dropped more than 1% - don't update best result
+            result = "Below threshold - keeping current best"
+            objective_value = success_rate  # Use SR for GP compatibility
+
+        # Clear business-focused output
+        delta_value = params.get('success_rate_delta', 0)
+        print(f"Delta {delta_value:.3f}: {result}")
+        print(f"  SR: {success_rate:.4f} (threshold: {threshold:.4f}, baseline: {self.baseline_success_rate:.4f})")
+        print(f"  Missed: ${missed_savings:.2f}")
+        print(f"  Current Best: SR={self.best_success_rate:.4f}, Missed=${self.best_missed_savings:.2f}")
+
+        # Normalize parameters for GP
+        x_norm = self._normalize_params(params)
+
+        # Store data for GP
+        self.X_sample.append(x_norm)
+        self.X_params.append(params)
+        self.y_sample.append(objective_value)
+        self.metrics.append({
+            "params": params, 
+            "scene_metrics": scene_metrics, 
+            "aggregated": aggregated
+        })
 
         return {
             "params": params,
@@ -337,7 +398,8 @@ class BayesianOptimizer:
                 "missed_savings": round(
                     float(self.best_metrics["aggregated"]["missed_savings"]), 2
                 ),
-                "combined_score": round(float(self.best_value), 2),
+                "objective_value": round(float(self.best_value), 2),
+                "decision_logic": "threshold_based",
             },
         }
 
@@ -372,23 +434,38 @@ class BayesianOptimizer:
             f"- Missed Savings: {self.objectives.get('missed_savings', 'minimize')} (lower is better)"
         )
         print(
-            f"Using combined objective: success_rate - (missed_savings / {self.missed_savings_weight})"
+            "Using threshold-based business logic:"
         )
         print(
-            "  This balances both metrics, optimizing for high success rate and low missed savings"
+            "  - If SR >= (baseline_SR - 1%), optimize for cost savings (minimize missed_savings)"
+        )
+        print(
+            "  - If SR < (baseline_SR - 1%), keep current best result intact"
+        )
+        print(
+            "  - No magic numbers - pure business-driven decisions"
         )
 
-        # First, run baseline evaluation with default parameters
-        baseline_params = self.config.baseline_parameters
-        print("\n" + "=" * 80)
-        print("BASELINE EVALUATION WITH DEFAULT PARAMETERS")
-        print("=" * 80)
-        print(f"Baseline parameters: {baseline_params}")
+        # First, run baseline evaluation with delta=0.0 for success_rate_delta config
+        if 'success_rate_delta' in self.parameter_names:
+            # Force delta=0.0 baseline for success_rate_delta optimization
+            baseline_params = {'success_rate_delta': 0.0}
+            print("\n" + "=" * 80)
+            print("BASELINE ESTABLISHMENT - DELTA=0.0 (ALWAYS AUTH)")
+            print("=" * 80)
+            print(f"Baseline parameters: {baseline_params}")
+        else:
+            # Use config baseline for multi-parameter configs (like Euclidean)
+            baseline_params = self.config.baseline_parameters
+            print("\n" + "=" * 80)
+            print("BASELINE ESTABLISHMENT - CONFIG BASELINE")
+            print("=" * 80)
+            print(f"Baseline parameters: {baseline_params}")
 
         baseline_result = self.evaluate_and_update(baseline_params)
 
         print(
-            f"Baseline success rate: {baseline_result['aggregated']['success_rate']:.2f}"
+            f"Baseline success rate: {baseline_result['aggregated']['success_rate']:.4f}"
         )
         print(
             f"Baseline missed savings: ${baseline_result['aggregated']['missed_savings']:.2f}"

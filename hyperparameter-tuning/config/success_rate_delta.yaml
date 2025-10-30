@@ -1,4 +1,4 @@
-# Configuration optimizing only the success_rate_delta parameter
+# Configuration optimizing success_rate_delta using threshold-based business logic
 experiment:
   name: "delta_based"
   output_csv: "success_rate_delta_results.csv"
@@ -8,13 +8,19 @@ experiment:
     section: "sr_cost_routing_constants"
 
 trials:
-  startup: 5 # Increased startup trials for better exploration
-  total: 15 # Increased total trials for more comprehensive optimization
+  startup: 3
+  total: 10
   parallel_jobs: 2
 
 objectives:
   success_rate: "maximize"
   missed_savings: "minimize"
+  
+  # Threshold-based decision logic
+  decision_logic:
+    type: "threshold"
+    success_rate_threshold_percent: 1.0
+    baseline_delta: 0.0
 
   aggregation:
     success_rate: "mean"
@@ -22,13 +28,12 @@ objectives:
 
 baseline:
   parameters:
-    success_rate_delta: 0.01
+    success_rate_delta: 0.0  # Always AUTH baseline
 
 parameters:
-  # Only success_rate_delta parameter with focused range for better optimization
   - name: "success_rate_delta"
     type: "float"
     precision: 2
     range:
       low: 0.01
-      high: 0.20
+      high: 0.15
