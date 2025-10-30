@@ -1684,6 +1684,8 @@
                 const volumeChartId = `volumeChart_${sceneName}_${runNumber}`;
                 const savingsChartId = `savingsChart_${sceneName}_${runNumber}`;
                 const successRateChartId = `successRateChart_${sceneName}_${runNumber}`;
+                const overallSuccessRateChartId = `overallSuccessRateChart_${sceneName}_${runNumber}`;
+                const avgCostSavedChartId = `avgCostSavedChart_${sceneName}_${runNumber}`;
                 
                 let html = `
                     <div class="analysis-section">
@@ -1717,6 +1719,22 @@
                                 <h5>📈 Average Success Rate by Processor Over Time</h5>
                                 <div style="position: relative; height: 400px;">
                                     <canvas id="${successRateChartId}"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            <div>
+                                <h5>📊 Cumulative Overall Success Rate Over Time</h5>
+                                <div style="position: relative; height: 400px;">
+                                    <canvas id="${overallSuccessRateChartId}"></canvas>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5>💵 Cumulative Total Cost Saved Over Time</h5>
+                                <div style="position: relative; height: 400px;">
+                                    <canvas id="${avgCostSavedChartId}"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -2152,6 +2170,182 @@
                                 },
                                 min: 0,
                                 max: 100,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+            
+            // Create Cumulative Overall Success Rate Chart (using final_outcome column)
+            const overallSuccessRateChartId = successChartId.replace('successChart', 'overallSuccessRateChart');
+            const overallSuccessRateCtx = document.getElementById(overallSuccessRateChartId);
+            if (overallSuccessRateCtx) {
+                const data = [];
+                let totalSuccessSoFar = 0;
+                let totalTxnsSoFar = 0;
+                
+                for (let windowIndex = 0; windowIndex < numWindows; windowIndex++) {
+                    const startIndex = windowIndex * windowSize;
+                    const endIndex = Math.min(startIndex + windowSize, transactions.length);
+                    const windowTransactions = transactions.slice(startIndex, endIndex);
+                    
+                    // Add current window's transactions to cumulative totals
+                    const successCount = windowTransactions.filter(t => t.final_outcome === 'success').length;
+                    totalSuccessSoFar += successCount;
+                    totalTxnsSoFar += windowTransactions.length;
+                    
+                    // Calculate cumulative overall success rate
+                    const cumulativeSuccessRate = totalTxnsSoFar > 0 ? (totalSuccessSoFar / totalTxnsSoFar) * 100 : 0;
+                    const timePoint = windowIndex * timeWindow;
+                    
+                    data.push({
+                        x: timePoint,
+                        y: cumulativeSuccessRate
+                    });
+                }
+                
+                new Chart(overallSuccessRateCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Overall Success Rate',
+                            data: data,
+                            borderColor: '#28a745',
+                            backgroundColor: '#28a74520',
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Cumulative Overall Success Rate Over Time',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Success Rate (%)',
+                                    font: { size: 12 }
+                                },
+                                min: 0,
+                                max: 100,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+            
+            // Create Cumulative Total Cost Saved Chart (using savings column)
+            const avgCostSavedChartId = successChartId.replace('successChart', 'avgCostSavedChart');
+            const avgCostSavedCtx = document.getElementById(avgCostSavedChartId);
+            if (avgCostSavedCtx) {
+                const data = [];
+                
+                for (let windowIndex = 0; windowIndex < numWindows; windowIndex++) {
+                    const startIndex = 0; // Always start from the beginning
+                    const endIndex = Math.min((windowIndex + 1) * windowSize, transactions.length);
+                    const cumulativeTransactions = transactions.slice(startIndex, endIndex);
+                    
+                    // Calculate total savings from the beginning up to current window
+                    const totalSavingsSoFar = cumulativeTransactions.reduce((sum, t) => {
+                        const savings = parseFloat(t.savings) || 0;
+                        return sum + savings;
+                    }, 0);
+                    
+                    const timePoint = windowIndex * timeWindow;
+                    
+                    data.push({
+                        x: timePoint,
+                        y: totalSavingsSoFar
+                    });
+                }
+                
+                new Chart(avgCostSavedCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Total Cost Saved',
+                            data: data,
+                            borderColor: '#ffc107',
+                            backgroundColor: '#ffc10720',
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Cumulative Total Cost Saved Over Time',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Total Cost Saved ($)',
+                                    font: { size: 12 }
+                                },
+                                beginAtZero: true,
                                 grid: {
                                     color: '#e0e0e0'
                                 }
