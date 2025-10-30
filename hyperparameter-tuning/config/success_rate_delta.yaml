@@ -8,8 +8,8 @@ experiment:
     section: "sr_cost_routing_constants"
 
 trials:
-  startup: 3 # Minimal startup trials for quick testing
-  total: 10 # Minimal total trials for quick testing
+  startup: 5 # Increased startup trials for better exploration
+  total: 15 # Increased total trials for more comprehensive optimization
   parallel_jobs: 2
 
 objectives:
@@ -24,32 +24,11 @@ baseline:
   parameters:
     success_rate_delta: 0.01
 
-  results:
-    - dataset: "scene-1"
-      success_rate: 98.10666667
-      missed_savings: 1.67
-
-    - dataset: "scene-2"
-      success_rate: 96.42666667
-      missed_savings: 1.67
-
-    - dataset: "scene-3"
-      success_rate: 94.45333333
-      missed_savings: 1.0
-
-    - dataset: "scene-4"
-      success_rate: 93.33333333
-      missed_savings: 0.0
-
-    - dataset: "scene-5"
-      success_rate: 87.72
-      missed_savings: 0.0
-
 parameters:
-  # Only success_rate_delta parameter
+  # Only success_rate_delta parameter with focused range for better optimization
   - name: "success_rate_delta"
     type: "float"
     precision: 2
     range:
       low: 0.01
-      high: 0.50
+      high: 0.20

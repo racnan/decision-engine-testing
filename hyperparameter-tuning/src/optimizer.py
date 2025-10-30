@@ -84,7 +84,8 @@ class BayesianOptimizer:
         # Set balance weight for missed_savings in the objective function
         # Smaller value = more weight on missed_savings
         # Higher value = more weight on success_rate
-        self.missed_savings_weight = 5.0
+        # Updated to 80,000 based on actual data ranges (missed_savings: $0-$12,000, success_rate: 0-1)
+        self.missed_savings_weight = 80000.0
 
     def _normalize_params(self, params: Dict[str, float]) -> np.ndarray:
         """
