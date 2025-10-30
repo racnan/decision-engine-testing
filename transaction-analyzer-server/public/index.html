@@ -1,0 +1,2699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction Success Rate Analyzer - Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+        }
+        
+        .main-layout {
+            display: flex;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .left-sidebar {
+            flex: 0 0 400px;
+            min-height: 600px;
+        }
+        
+        .main-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 0px;
+            font-size: 2em;
+        }
+        
+        .demo-banner {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            align-items: center;
+            flex-wrap: wrap;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        label {
+            font-weight: bold;
+            color: #555;
+            font-size: 14px;
+        }
+        
+        input, select, button {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .file-input-label {
+            padding: 10px 20px;
+            background: #28a745;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        
+        .file-input-label:hover {
+            background: #218838;
+        }
+        
+        .testcase-selector {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .testcase-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-top: 10px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .testcase-item {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .testcase-item:hover {
+            border-color: #007bff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+        }
+        
+        .testcase-item.selected {
+            border-color: #007bff;
+            background: #e3f2fd;
+        }
+        
+        .testcase-item.multi-selected {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        
+        .selection-controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .selection-controls button {
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+        
+        .testcase-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .testcase-description {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.3;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        #chartContainer {
+            height: 500px;
+        }
+        
+        .chart-container {
+            position: relative;
+            margin-bottom: 30px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .processor-filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .processor-filter {
+            padding: 8px 16px;
+            border: 2px solid #007bff;
+            background: white;
+            color: #007bff;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .processor-filter.active {
+            background: #007bff;
+            color: white;
+        }
+        
+        .processor-filter:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 18px;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #c3e6cb;
+        }
+
+        div#message {
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            bottom: 0;
+            border-radius: 0 20px 20px 0;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #bee5eb;
+        }
+        
+        .simulation-controls {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .simulation-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .simulation-progress {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .progress-header h4 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .cancel-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .cancel-btn:hover {
+            background: #c82333;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .simulation-log {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        
+        .log-entry.success {
+            color: #28a745;
+        }
+        
+        .log-entry.error {
+            color: #dc3545;
+        }
+        
+        .log-entry.info {
+            color: #007bff;
+        }
+        
+        .simulation-results {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .simulation-results h4 {
+            margin-top: 0;
+            color: #155724;
+        }
+        
+        .results-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .result-card {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .result-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #155724;
+        }
+        
+        .result-label {
+            font-size: 0.8em;
+            color: #666;
+        }
+        
+        .scene-results {
+            margin-bottom: 15px;
+        }
+        
+        .scene-header {
+            background: #155724;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .run-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .run-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        
+        .run-card.success {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        
+        .run-card.failed {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+        
+        .analysis-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        
+        .analysis-btn:hover {
+            background: #138496;
+        }
+        
+        .performance-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 1000;
+        }
+        
+        .performance-modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 10px;
+        }
+        
+        .modal-close {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        .modal-close:hover {
+            background: #c82333;
+        }
+        
+        .analysis-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        .analysis-table th,
+        .analysis-table td {
+            border: 1px solid #dee2e6;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        .analysis-table th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .analysis-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .analysis-section {
+            margin-bottom: 30px;
+        }
+        
+        .analysis-section h4 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- <div class="demo-banner">
+            📊 Transaction Success Rate Analyzer - Select a test case or upload your own CSV file
+        </div> -->
+        
+        <div class="main-layout">
+            <div class="left-sidebar">
+                <div class="testcase-selector">
+                    <h3>📁 Available Test Cases</h3>
+                    <div class="selection-controls">
+                        <button id="selectAllBtn">Select All</button>
+                        <button id="clearSelectionBtn">Clear Selection</button>
+                        <button id="loadSelectedBtn">Load Selected</button>
+                        <span id="selectionCount" style="margin-left: 10px; font-weight: bold;">0 selected</span>
+                    </div>
+                    <div id="testcaseGrid" class="testcase-grid">
+                        <div class="loading">Loading test cases...</div>
+                    </div>
+                </div>
+                
+                <div class="simulation-controls">
+                    <h3>🚀 Run Simulations</h3>
+                    <div class="simulation-form">
+                        <div class="control-group">
+                            <label for="numRuns">Number of Runs per Scene:</label>
+                            <input type="number" id="numRuns" value="1" min="1" max="10" />
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="algorithm">Algorithm:</label>
+                            <input type="text" id="algorithm" value="SUPER_ROUTER" placeholder="Enter algorithm name" />
+                        </div>
+                        
+                        <div class="control-group">
+                            <button id="runSimulationsBtn">Run Simulations</button>
+                        </div>
+                    </div>
+                    
+                    <div id="simulationProgress" class="simulation-progress" style="display: none;">
+                        <div class="progress-header">
+                            <h4>Simulation Progress</h4>
+                            <button id="cancelSimulationBtn" class="cancel-btn">Cancel</button>
+                        </div>
+                        <div class="progress-bar">
+                            <div id="progressFill" class="progress-fill"></div>
+                        </div>
+                        <div id="progressText" class="progress-text">Initializing...</div>
+                        <div id="simulationLog" class="simulation-log"></div>
+                    </div>
+                    
+                    <div id="simulationResults" class="simulation-results" style="display: none;">
+                        <h4>Simulation Results</h4>
+                        <div id="resultsContent"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="main-content">
+                <h1>🔍 Transaction Success Rate Analyzer</h1>
+                <div class="controls">
+                    <div class="control-group">
+                        <label for="csvFile">Upload Custom CSV Files:</label>
+                        <div class="file-input-wrapper">
+                            <input type="file" id="csvFile" accept=".csv" multiple />
+                            <label for="csvFile" class="file-input-label">Choose Files</label>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>Current Data Source:</label>
+                        <span id="dataSource" style="padding: 10px; background: #e9ecef; border-radius: 5px; font-weight: bold;">
+                            No file selected
+                        </span>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="tpsInput">TPS (Transactions Per Second):</label>
+                        <input type="number" id="tpsInput" value="10" min="1" max="1000" />
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="timeWindow">Time Window (seconds):</label>
+                        <select id="timeWindow">
+                            <option value="1">1 second</option>
+                            <option value="5">5 seconds</option>
+                            <option value="10" selected>10 seconds</option>
+                            <option value="30">30 seconds</option>
+                            <option value="60">1 minute</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <button id="refreshBtn">Refresh Analysis</button>
+                    </div>
+                </div>
+                
+                <div id="message"></div>
+                
+                <div id="stats" class="stats"></div>
+                
+                <div id="processorFilters" class="processor-filters"></div>
+                
+                <div id="chartContainer" class="chart-container">
+                    <canvas id="successChart"></canvas>
+                </div>
+                
+                <!-- Performance Analysis Section -->
+                <div id="performanceAnalysisSection" style="display: none;">
+                    <div class="chart-container">
+                        <h3 id="performanceAnalysisTitle">📊 Performance Analysis</h3>
+                        <div id="performanceAnalysisContent">
+                            <!-- Performance analysis content will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Analysis Modal (kept for backward compatibility) -->
+    <div id="performanceModal" class="performance-modal">
+        <div class="performance-modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Performance Analysis</h3>
+                <button class="modal-close" onclick="closePerformanceModal()">Close</button>
+            </div>
+            <div id="modalContent">
+                <!-- Performance analysis content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class TransactionAnalyzer {
+            constructor() {
+                this.data = [];
+                this.chart = null;
+                this.activeProcessors = new Set();
+                this.testcases = [];
+                this.selectedTestcases = new Set();
+                this.colors = [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
+                    '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',
+                    '#4BC0C0', '#FF6384', '#36A2EB', '#FFCE56'
+                ];
+                this.initializeEventListeners();
+                this.loadTestcases();
+            }
+            
+            initializeEventListeners() {
+                document.getElementById('csvFile').addEventListener('change', this.handleFileUpload.bind(this));
+                document.getElementById('refreshBtn').addEventListener('click', this.analyzeData.bind(this));
+                document.getElementById('tpsInput').addEventListener('input', this.updateChart.bind(this));
+                document.getElementById('timeWindow').addEventListener('change', this.updateChart.bind(this));
+                
+                // Multi-selection controls
+                document.getElementById('selectAllBtn').addEventListener('click', this.selectAllTestcases.bind(this));
+                document.getElementById('clearSelectionBtn').addEventListener('click', this.clearSelection.bind(this));
+                document.getElementById('loadSelectedBtn').addEventListener('click', this.loadSelectedTestcases.bind(this));
+                
+                // Simulation controls
+                document.getElementById('runSimulationsBtn').addEventListener('click', this.runSimulations.bind(this));
+                document.getElementById('cancelSimulationBtn').addEventListener('click', this.cancelSimulation.bind(this));
+            }
+            
+            async loadTestcases() {
+                try {
+                    const response = await fetch('/api/testcases');
+                    const data = await response.json();
+                    this.testcases = data.testcases;
+                    this.renderTestcases();
+                    this.showMessage(`📁 Found ${data.total_count} test cases`, 'info');
+                } catch (error) {
+                    console.error('Error loading testcases:', error);
+                    this.showMessage('❌ Failed to load test cases', 'error');
+                    document.getElementById('testcaseGrid').innerHTML = '<div class="error">Failed to load test cases</div>';
+                }
+            }
+            
+            renderTestcases() {
+                const grid = document.getElementById('testcaseGrid');
+                grid.innerHTML = '';
+                
+                this.testcases.forEach(testcase => {
+                    const item = document.createElement('div');
+                    item.className = 'testcase-item';
+                    item.dataset.sceneName = testcase.scene_name;
+                    item.innerHTML = `
+                        <div class="testcase-name">${testcase.scene_name}</div>
+                        <!-- <div class="testcase-description">${testcase.description || 'No description available'}</div> -->
+                    `;
+                    
+                    item.addEventListener('click', (event) => {
+                        if (event.ctrlKey || event.metaKey) {
+                            this.toggleTestcaseSelection(testcase, item);
+                        } else {
+                            this.selectTestcase(testcase);
+                        }
+                    });
+                    
+                    grid.appendChild(item);
+                });
+                
+                this.updateSelectionCount();
+            }
+            
+            async selectTestcase(testcase) {
+                // Clear previous selection
+                document.querySelectorAll('.testcase-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                
+                // Mark as selected
+                event.target.closest('.testcase-item').classList.add('selected');
+                
+                this.selectedTestcase = testcase;
+                this.showMessage(`📁 Loading ${testcase.scene_name}...`, 'loading');
+                
+                try {
+                    const response = await fetch(`/api/testcases/${testcase.scene_name}/csv`);
+                    const csvContent = await response.text();
+                    
+                    // Parse CSV content
+                    Papa.parse(csvContent, {
+                        header: true,
+                        complete: (results) => {
+                            const transactions = results.data.filter(row => row.paymentId || Object.keys(row).length > 1);
+                            
+                            this.data = transactions;
+                            document.getElementById('dataSource').textContent = `${testcase.scene_name} (${transactions.length} transactions)`;
+                            this.showMessage(`✅ Successfully loaded ${transactions.length} transactions from ${testcase.scene_name}`, 'success');
+                            this.analyzeData();
+                        },
+                        error: (error) => {
+                            this.showMessage(`❌ Error parsing ${testcase.scene_name}: ${error.message}`, 'error');
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error loading testcase:', error);
+                    this.showMessage(`❌ Failed to load ${testcase.scene_name}`, 'error');
+                }
+            }
+            
+            handleFileUpload(event) {
+                const files = Array.from(event.target.files);
+                if (files.length === 0) return;
+                
+                // Clear testcase selection
+                document.querySelectorAll('.testcase-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                this.selectedTestcase = null;
+                
+                this.showMessage(`📁 Loading ${files.length} CSV file(s)...`, 'loading');
+                this.data = [];
+                this.fileData = {}; // Store data by filename for reference
+                
+                let filesProcessed = 0;
+                let totalTransactions = 0;
+                
+                files.forEach((file, index) => {
+                    Papa.parse(file, {
+                        header: true,
+                        complete: (results) => {
+                            const fileTransactions = results.data.filter(row => row.paymentId || Object.keys(row).length > 1);
+                            
+                            // Add file identifier to each transaction
+                            fileTransactions.forEach(transaction => {
+                                transaction._fileName = file.name;
+                                transaction._fileIndex = index;
+                            });
+                            
+                            this.fileData[file.name] = fileTransactions;
+                            this.data = this.data.concat(fileTransactions);
+                            totalTransactions += fileTransactions.length;
+                            filesProcessed++;
+                            
+                            if (filesProcessed === files.length) {
+                                const fileNames = Object.keys(this.fileData).join(', ');
+                                document.getElementById('dataSource').textContent = `${fileNames} (${files.length} file(s) uploaded)`;
+                                this.showMessage(`✅ Successfully loaded ${totalTransactions} transactions from ${files.length} file(s)`, 'success');
+                                this.analyzeData();
+                            }
+                        },
+                        error: (error) => {
+                            this.showMessage(`❌ Error parsing ${file.name}: ${error.message}`, 'error');
+                            filesProcessed++;
+                        }
+                    });
+                });
+            }
+            
+            showMessage(message, type = 'info') {
+                const messageDiv = document.getElementById('message');
+                messageDiv.innerHTML = `<div class="${type}">${message}</div>`;
+                setTimeout(() => {
+                    messageDiv.innerHTML = '';
+                }, 5000);
+            }
+            
+            extractProcessorNetworks() {
+                const processors = new Set();
+                
+                if (this.data.length === 0) return [];
+                
+                const outcomeColumns = Object.keys(this.data[0]).filter(col => col.endsWith('_outcome'));
+                
+                outcomeColumns.forEach(col => {
+                    const processorNetwork = col.replace('_outcome', '');
+                    processors.add(processorNetwork);
+                });
+                
+                return Array.from(processors);
+            }
+            
+            calculateSuccessRates() {
+                const tps = parseInt(document.getElementById('tpsInput').value);
+                const timeWindow = parseInt(document.getElementById('timeWindow').value);
+                const processors = this.extractProcessorNetworks();
+                
+                // Create time-based groups - simpler approach using transaction index as time
+                const results = {};
+                
+                processors.forEach(processor => {
+                    results[processor] = [];
+                    const outcomeColumn = `${processor}_outcome`;
+                    
+                    // Group transactions into time windows
+                    const windowSize = tps * timeWindow; // transactions per window
+                    const numWindows = Math.ceil(this.data.length / windowSize);
+                    
+                    for (let windowIndex = 0; windowIndex < numWindows; windowIndex++) {
+                        const startIndex = windowIndex * windowSize;
+                        const endIndex = Math.min(startIndex + windowSize, this.data.length);
+                        const windowTransactions = this.data.slice(startIndex, endIndex);
+                        
+                        let successCount = 0;
+                        let totalCount = 0;
+                        
+                        windowTransactions.forEach(transaction => {
+                            if (transaction[outcomeColumn] && (transaction[outcomeColumn] === 'success' || transaction[outcomeColumn] === 'fail')) {
+                                totalCount++;
+                                if (transaction[outcomeColumn] === 'success') {
+                                    successCount++;
+                                }
+                            }
+                        });
+                        
+                        if (totalCount > 0) {
+                            // Calculate success rate: (successCount / totalCount) * 100
+                            // This gives the actual success rate considering both successes and failures
+                            const successRate = (successCount / totalCount) * 100;
+                            
+                            results[processor].push({
+                                time: windowIndex * timeWindow, // time in seconds
+                                successRate: successRate,
+                                successCount: successCount,
+                                totalCount: totalCount,
+                                failCount: totalCount - successCount
+                            });
+                        }
+                    }
+                });
+                
+                return results;
+            }
+            
+            createProcessorFilters(processors) {
+                const filtersContainer = document.getElementById('processorFilters');
+                filtersContainer.innerHTML = '';
+                
+                const allBtn = document.createElement('div');
+                allBtn.className = 'processor-filter active';
+                allBtn.textContent = 'All Processors';
+                allBtn.addEventListener('click', () => {
+                    this.activeProcessors.clear();
+                    processors.forEach(p => this.activeProcessors.add(p));
+                    this.updateFilterButtons();
+                    this.updateChart();
+                });
+                filtersContainer.appendChild(allBtn);
+                
+                processors.forEach(processor => {
+                    const btn = document.createElement('div');
+                    btn.className = 'processor-filter active';
+                    btn.textContent = processor;
+                    btn.addEventListener('click', () => {
+                        if (this.activeProcessors.has(processor)) {
+                            this.activeProcessors.delete(processor);
+                        } else {
+                            this.activeProcessors.add(processor);
+                        }
+                        this.updateFilterButtons();
+                        this.updateChart();
+                    });
+                    filtersContainer.appendChild(btn);
+                    this.activeProcessors.add(processor);
+                });
+                
+                filtersContainer.style.display = 'flex';
+            }
+            
+            updateFilterButtons() {
+                const buttons = document.querySelectorAll('.processor-filter');
+                buttons.forEach((btn, index) => {
+                    if (index === 0) {
+                        btn.classList.toggle('active', this.activeProcessors.size === buttons.length - 1);
+                    } else {
+                        const processor = btn.textContent;
+                        btn.classList.toggle('active', this.activeProcessors.has(processor));
+                    }
+                });
+            }
+            
+            displayStats(successRates) {
+                const statsContainer = document.getElementById('stats');
+                const allProcessors = Object.keys(successRates);
+                const activeProcessors = Array.from(this.activeProcessors);
+                
+                // Calculate stats from the raw data, considering only active processors
+                let totalTransactions = this.data.length;
+                let totalSuccessful = 0;
+                
+                // Count successful transactions across only the active processors
+                this.data.forEach(transaction => {
+                    let hasAnySuccess = false;
+                    activeProcessors.forEach(processor => {
+                        const outcomeColumn = `${processor}_outcome`;
+                        if (transaction[outcomeColumn] === 'success') {
+                            hasAnySuccess = true;
+                        }
+                    });
+                    if (hasAnySuccess) {
+                        totalSuccessful++;
+                    }
+                });
+                
+                const avgSuccessRate = totalTransactions > 0 ? (totalSuccessful / totalTransactions) * 100 : 0;
+                
+                statsContainer.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${activeProcessors.length}</div>
+                        <div class="stat-label">Active Processor+Network Combinations</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${totalTransactions.toLocaleString()}</div>
+                        <div class="stat-label">Total Transactions</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${totalSuccessful.toLocaleString()}</div>
+                        <div class="stat-label">Successful Transactions</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${avgSuccessRate.toFixed(2)}%</div>
+                        <div class="stat-label">Overall Success Rate</div>
+                    </div>
+                `;
+                
+                statsContainer.style.display = 'grid';
+            }
+            
+            createChart(successRates) {
+                const ctx = document.getElementById('successChart').getContext('2d');
+                
+                if (this.chart) {
+                    this.chart.destroy();
+                }
+                
+                const datasets = [];
+                let colorIndex = 0;
+                
+                Object.keys(successRates).forEach(processor => {
+                    if (this.activeProcessors.has(processor)) {
+                        const data = successRates[processor].map(point => ({
+                            x: point.time,
+                            y: point.successRate
+                        }));
+                        
+                        datasets.push({
+                            label: processor,
+                            data: data,
+                            borderColor: this.colors[colorIndex % this.colors.length],
+                            backgroundColor: this.colors[colorIndex % this.colors.length] + '20',
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        });
+                        colorIndex++;
+                    }
+                });
+                
+                this.chart = new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Success Rate Over Time by Processor+Network',
+                                font: { size: 18, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 14, weight: 'bold' }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Success Rate (%)',
+                                    font: { size: 14, weight: 'bold' }
+                                },
+                                min: 0,
+                                max: 100,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        },
+                        elements: {
+                            point: {
+                                hoverBackgroundColor: '#fff',
+                                hoverBorderWidth: 2
+                            }
+                        }
+                    }
+                });
+            }
+            
+            analyzeData() {
+                if (this.data.length === 0) {
+                    this.showMessage('❌ No data available', 'error');
+                    return;
+                }
+                
+                this.showMessage('🔄 Analyzing transaction data...', 'loading');
+                
+                try {
+                    const successRates = this.calculateSuccessRates();
+                    const processors = Object.keys(successRates);
+                    
+                    if (processors.length === 0) {
+                        this.showMessage('❌ No processor+network combinations found in the data', 'error');
+                        return;
+                    }
+                    
+                    this.displayStats(successRates);
+                    this.createProcessorFilters(processors);
+                    this.createChart(successRates);
+                    
+                    this.showMessage(`✅ Analysis complete! Found ${processors.length} processor+network combinations`, 'success');
+                } catch (error) {
+                    this.showMessage(`❌ Error analyzing data: ${error.message}`, 'error');
+                }
+            }
+            
+            updateChart() {
+                if (this.data.length > 0) {
+                    const successRates = this.calculateSuccessRates();
+                    this.displayStats(successRates);
+                    this.createChart(successRates);
+                }
+            }
+            
+            // Multi-selection methods
+            toggleTestcaseSelection(testcase, item) {
+                if (this.selectedTestcases.has(testcase.scene_name)) {
+                    this.selectedTestcases.delete(testcase.scene_name);
+                    item.classList.remove('multi-selected');
+                } else {
+                    this.selectedTestcases.add(testcase.scene_name);
+                    item.classList.add('multi-selected');
+                }
+                this.updateSelectionCount();
+            }
+            
+            selectAllTestcases() {
+                this.selectedTestcases.clear();
+                this.testcases.forEach(testcase => {
+                    this.selectedTestcases.add(testcase.scene_name);
+                });
+                this.updateSelectionUI();
+                this.updateSelectionCount();
+            }
+            
+            clearSelection() {
+                this.selectedTestcases.clear();
+                this.updateSelectionUI();
+                this.updateSelectionCount();
+            }
+            
+            updateSelectionUI() {
+                document.querySelectorAll('.testcase-item').forEach(item => {
+                    const sceneName = item.dataset.sceneName;
+                    if (this.selectedTestcases.has(sceneName)) {
+                        item.classList.add('multi-selected');
+                    } else {
+                        item.classList.remove('multi-selected');
+                    }
+                });
+            }
+            
+            updateSelectionCount() {
+                const count = this.selectedTestcases.size;
+                document.getElementById('selectionCount').textContent = `${count} selected`;
+            }
+            
+            async loadSelectedTestcases() {
+                if (this.selectedTestcases.size === 0) {
+                    this.showMessage('❌ No test cases selected', 'error');
+                    return;
+                }
+                
+                const selectedArray = Array.from(this.selectedTestcases);
+                this.showMessage(`📁 Loading ${selectedArray.length} test case(s)...`, 'loading');
+                
+                this.data = [];
+                let filesProcessed = 0;
+                let totalTransactions = 0;
+                
+                for (const sceneName of selectedArray) {
+                    try {
+                        const response = await fetch(`/api/testcases/${sceneName}/csv`);
+                        const csvContent = await response.text();
+                        
+                        await new Promise((resolve, reject) => {
+                            Papa.parse(csvContent, {
+                                header: true,
+                                complete: (results) => {
+                                    const transactions = results.data.filter(row => row.paymentId || Object.keys(row).length > 1);
+                                    
+                                    // Add scene identifier to each transaction
+                                    transactions.forEach(transaction => {
+                                        transaction._sceneName = sceneName;
+                                    });
+                                    
+                                    this.data = this.data.concat(transactions);
+                                    totalTransactions += transactions.length;
+                                    filesProcessed++;
+                                    resolve();
+                                },
+                                error: (error) => {
+                                    this.showMessage(`❌ Error parsing ${sceneName}: ${error.message}`, 'error');
+                                    filesProcessed++;
+                                    reject(error);
+                                }
+                            });
+                        });
+                    } catch (error) {
+                        console.error(`Error loading ${sceneName}:`, error);
+                        this.showMessage(`❌ Failed to load ${sceneName}`, 'error');
+                        filesProcessed++;
+                    }
+                }
+                
+                if (this.data.length > 0) {
+                    const sceneNames = selectedArray.join(', ');
+                    document.getElementById('dataSource').textContent = `${sceneNames} (${totalTransactions} transactions from ${selectedArray.length} scenes)`;
+                    this.showMessage(`✅ Successfully loaded ${totalTransactions} transactions from ${selectedArray.length} test case(s)`, 'success');
+                    this.analyzeData();
+                } else {
+                    this.showMessage('❌ No valid transaction data found in selected test cases', 'error');
+                }
+            }
+            
+            // Simulation methods
+            async runSimulations() {
+                if (this.selectedTestcases.size === 0) {
+                    this.showMessage('❌ No test cases selected for simulation', 'error');
+                    return;
+                }
+                
+                const numRuns = parseInt(document.getElementById('numRuns').value);
+                const algorithm = document.getElementById('algorithm').value.trim();
+                
+                if (!algorithm) {
+                    this.showMessage('❌ Algorithm name is required', 'error');
+                    return;
+                }
+                
+                const selectedScenes = Array.from(this.selectedTestcases);
+                
+                // Show progress UI
+                document.getElementById('simulationProgress').style.display = 'block';
+                document.getElementById('simulationResults').style.display = 'none';
+                document.getElementById('runSimulationsBtn').disabled = true;
+                
+                // Reset progress
+                document.getElementById('progressFill').style.width = '0%';
+                document.getElementById('progressText').textContent = 'Starting simulations...';
+                document.getElementById('simulationLog').innerHTML = '';
+                
+                this.addLogEntry('🚀 Starting simulations...', 'info');
+                this.addLogEntry(`📋 Scenes: ${selectedScenes.join(', ')}`, 'info');
+                this.addLogEntry(`🔄 Runs per scene: ${numRuns}`, 'info');
+                this.addLogEntry(`⚙️ Algorithm: ${algorithm}`, 'info');
+                
+                try {
+                    const response = await fetch('/api/run-simulations', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            scenes: selectedScenes,
+                            numRuns: numRuns,
+                            algorithm: algorithm
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to start simulations');
+                    }
+                    
+                    // Handle streaming response
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n').filter(line => line.trim());
+                        
+                        for (const line of lines) {
+                            try {
+                                const data = JSON.parse(line);
+                                this.handleSimulationUpdate(data);
+                            } catch (e) {
+                                console.warn('Failed to parse simulation update:', e.message);
+                                console.warn('Line length:', line.length);
+                                console.warn('Line preview:', line.substring(0, 200) + '...');
+                                
+                                // Try to handle the case where the line might be too long
+                                if (line.includes('"type":"complete"')) {
+                                    console.log('Detected complete message, attempting to extract data...');
+                                    try {
+                                        // Try to find the complete data section
+                                        const match = line.match(/"data":(\{.*\})}\s*$/);
+                                        if (match) {
+                                            const completeData = JSON.parse(match[1]);
+                                            this.handleSimulationUpdate({ type: 'complete', data: completeData });
+                                        }
+                                    } catch (extractError) {
+                                        console.error('Failed to extract complete data:', extractError);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Simulation error:', error);
+                    this.addLogEntry(`❌ Error: ${error.message}`, 'error');
+                    this.showMessage(`❌ Simulation failed: ${error.message}`, 'error');
+                } finally {
+                    document.getElementById('runSimulationsBtn').disabled = false;
+                }
+            }
+            
+            handleSimulationUpdate(update) {
+                const { type, data } = update;
+                
+                switch (type) {
+                    case 'status':
+                        this.addLogEntry(`📊 Initialized: ${data.total_runs} total runs across ${data.total_scenes} scenes`, 'info');
+                        break;
+                        
+                    case 'scene_start':
+                        this.addLogEntry(`🎬 Starting ${data.scene} (${data.index}/${data.total})`, 'info');
+                        document.getElementById('progressText').textContent = `Processing ${data.scene}...`;
+                        break;
+                        
+                    case 'run_start':
+                        this.addLogEntry(`▶️ ${data.scene} - Run ${data.run}/${data.total_runs}`, 'info');
+                        break;
+                        
+                    case 'run_complete':
+                        this.addLogEntry(`✅ ${data.scene} - Run ${data.run} completed`, 'success');
+                        const progress = data.progress || 0;
+                        document.getElementById('progressFill').style.width = `${progress}%`;
+                        document.getElementById('progressText').textContent = `Progress: ${progress.toFixed(1)}%`;
+                        break;
+                        
+                    case 'run_failed':
+                        this.addLogEntry(`❌ ${data.scene} - Run ${data.run} failed: ${data.error}`, 'error');
+                        break;
+                        
+                    case 'scene_complete':
+                        this.addLogEntry(`🏁 ${data.scene} completed (${data.runs} runs)`, 'success');
+                        break;
+                        
+                    case 'complete':
+                        this.addLogEntry('🎉 All simulations completed!', 'success');
+                        document.getElementById('progressFill').style.width = '100%';
+                        document.getElementById('progressText').textContent = 'Completed!';
+                        console.log('Complete data received:', data);
+                        this.displaySimulationResults(data);
+                        this.showMessage('✅ Simulations completed successfully!', 'success');
+                        break;
+                        
+                    case 'error':
+                        this.addLogEntry(`💥 Simulation failed: ${data.error}`, 'error');
+                        this.showMessage(`❌ Simulation failed: ${data.error}`, 'error');
+                        break;
+                }
+            }
+            
+            addLogEntry(message, type = 'info') {
+                const log = document.getElementById('simulationLog');
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                entry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+                log.appendChild(entry);
+                log.scrollTop = log.scrollHeight;
+            }
+            
+            displaySimulationResults(results) {
+                console.log('displaySimulationResults called with:', results);
+                
+                const resultsContainer = document.getElementById('resultsContent');
+                const resultsDiv = document.getElementById('simulationResults');
+                
+                if (!results || !results.scenes) {
+                    console.error('Invalid results data:', results);
+                    resultsContainer.innerHTML = '<div class="error">Invalid simulation results data</div>';
+                    resultsDiv.style.display = 'block';
+                    return;
+                }
+                
+                // Calculate overall statistics
+                let totalTransactions = 0;
+                let totalSuccessful = 0;
+                let totalSavings = 0;
+                let totalBestPossible = 0;
+                
+                console.log('Processing scenes:', results.scenes.length);
+                
+                results.scenes.forEach((scene, sceneIndex) => {
+                    console.log(`Scene ${sceneIndex}:`, scene.scene_name, 'runs:', scene.runs.length);
+                    
+                    scene.runs.forEach((run, runIndex) => {
+                        console.log(`  Run ${runIndex}:`, run.status);
+                        
+                        if (run.status === 'success' && run.results && run.results.summary) {
+                            const summary = run.results.summary;
+                            console.log(`    Summary:`, summary);
+                            
+                            totalTransactions += summary.total_transactions || 0;
+                            totalSuccessful += summary.successful_transactions || 0;
+                            totalSavings += (summary.total_savings !== null && summary.total_savings !== undefined) ? summary.total_savings : 0;
+                            totalBestPossible += (summary.best_possible_savings !== null && summary.best_possible_savings !== undefined) ? summary.best_possible_savings : 0;
+                        } else {
+                            console.log(`    No summary data for run ${runIndex}:`, run.results);
+                        }
+                    });
+                });
+                
+                console.log('Totals:', {
+                    totalTransactions,
+                    totalSuccessful,
+                    totalSavings,
+                    totalBestPossible
+                });
+                
+                const overallSuccessRate = totalTransactions > 0 ? (totalSuccessful / totalTransactions) * 100 : 0;
+                const overallEfficiency = totalBestPossible > 0 ? (totalSavings / totalBestPossible) * 100 : 0;
+                
+                let html = `
+                    <div class="results-summary">
+                        <div class="result-card">
+                            <div class="result-value">${results.total_scenes}</div>
+                            <div class="result-label">Scenes</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-value">${results.completed_runs}/${results.total_runs}</div>
+                            <div class="result-label">Runs Completed</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-value">${totalTransactions.toLocaleString()}</div>
+                            <div class="result-label">Total Transactions</div>
+                        </div>
+                    </div>
+                `;
+                
+                // Add per-scene results
+                results.scenes.forEach(scene => {
+                    html += `
+                        <div class="scene-results">
+                            <div class="scene-header">${scene.scene_name}</div>
+                            <div class="run-results">
+                    `;
+                    
+                    scene.runs.forEach(run => {
+                        const statusClass = run.status === 'success' ? 'success' : 'failed';
+                        let runContent = `<strong>Run ${run.run_number}</strong><br>Status: ${run.status}`;
+                        
+                        if (run.status === 'success' && run.results && run.results.summary) {
+                            const summary = run.results.summary;
+                            runContent += `<br>Transactions: ${summary.total_transactions || 0}`;                        
+                            // Add button to view detailed analysis
+                            runContent += `<br><button onclick="showPerformanceAnalysis('${scene.scene_name}', ${run.run_number})" class="analysis-btn">View Analysis</button>`;
+                        } else if (run.error) {
+                            runContent += `<br>Error: ${run.error}`;
+                        }
+                        
+                        html += `<div class="run-card ${statusClass}">${runContent}</div>`;
+                    });
+                    
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                resultsContainer.innerHTML = html;
+                resultsDiv.style.display = 'block';
+            }
+            
+            cancelSimulation() {
+                // Note: This is a placeholder - actual cancellation would require server-side support
+                this.addLogEntry('⚠️ Cancellation requested (not implemented)', 'info');
+                this.showMessage('⚠️ Simulation cancellation not implemented', 'info');
+            }
+        }
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new TransactionAnalyzer();
+        });
+        
+        // Global functions for performance analysis
+        async function showPerformanceAnalysis(sceneName, runNumber) {
+            try {
+                const response = await fetch(`/api/simulation-results/${sceneName}/${runNumber}`);
+                const data = await response.json();
+                
+                if (!data.performance_analysis) {
+                    alert('No performance analysis data available for this run');
+                    return;
+                }
+                
+                const section = document.getElementById('performanceAnalysisSection');
+                const title = document.getElementById('performanceAnalysisTitle');
+                const content = document.getElementById('performanceAnalysisContent');
+                
+                title.textContent = `📊 Performance Analysis - ${sceneName} Run ${runNumber}`;
+                
+                let html = '';
+                
+                // Add simulation results charts if we have the raw CSV data
+                if (data.summary) {
+                    html += await generateSimulationCharts(sceneName, runNumber);
+                }
+
+                // Overall Performance
+                if (data.performance_analysis.overall_performance) {
+                    html += `
+                        <div class="analysis-section">
+                            <h4>📊 Overall Performance</h4>
+                            <table class="analysis-table">
+                                <thead>
+                                    <tr>
+                                        ${data.performance_analysis.overall_performance.headers.map(h => `<th>${h.replace(/\r$/, '')}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.performance_analysis.overall_performance.data.map(row => `
+                                        <tr>
+                                            ${data.performance_analysis.overall_performance.headers.map(h => `<td>${row[h] || ''}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+                
+                // Processor Performance
+                if (data.performance_analysis.processor_performance) {
+                    html += `
+                        <div class="analysis-section">
+                            <h4>🔧 Processor Performance</h4>
+                            <table class="analysis-table">
+                                <thead>
+                                    <tr>
+                                        ${data.performance_analysis.processor_performance.headers.map(h => `<th>${h.replace(/\r$/, '')}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.performance_analysis.processor_performance.data.map(row => `
+                                        <tr>
+                                            ${data.performance_analysis.processor_performance.headers.map(h => `<td>${row[h] || ''}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+                
+                // Network Performance
+                if (data.performance_analysis.network_performance) {
+                    html += `
+                        <div class="analysis-section">
+                            <h4>🌐 Network Performance</h4>
+                            <table class="analysis-table">
+                                <thead>
+                                    <tr>
+                                        ${data.performance_analysis.network_performance.headers.map(h => `<th>${h.replace(/\r$/, '')}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.performance_analysis.network_performance.data.map(row => `
+                                        <tr>
+                                            ${data.performance_analysis.network_performance.headers.map(h => `<td>${row[h] || ''}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+                
+                // Processor-Network Breakdown
+                if (data.performance_analysis.processor_network_breakdown) {
+                    html += `
+                        <div class="analysis-section">
+                            <h4>🔗 Processor-Network Breakdown</h4>
+                            <table class="analysis-table">
+                                <thead>
+                                    <tr>
+                                        ${data.performance_analysis.processor_network_breakdown.headers.map(h => `<th>${h.replace(/\r$/, '')}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.performance_analysis.processor_network_breakdown.data.map(row => `
+                                        <tr>
+                                            ${data.performance_analysis.processor_network_breakdown.headers.map(h => `<td>${row[h] || ''}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+                
+                if (html === '') {
+                    html = '<div class="info">No detailed performance analysis data available.</div>';
+                }
+                
+                content.innerHTML = html;
+                section.style.display = 'block';
+                
+                // Scroll to the performance analysis section
+                section.scrollIntoView({ behavior: 'smooth' });
+                
+            } catch (error) {
+                console.error('Error loading performance analysis:', error);
+                alert('Failed to load performance analysis data');
+            }
+        }
+        
+        // Function to generate simulation charts from output_results.csv
+        async function generateSimulationCharts(sceneName, runNumber) {
+            try {
+                // For now, we'll create charts based on the summary data
+                // In a full implementation, you'd want to serve the actual output_results.csv
+                const response = await fetch(`/api/simulation-results/${sceneName}/${runNumber}`);
+                if (!response.ok) {
+                    return '<div class="info">Could not load simulation results data.</div>';
+                }
+                
+                const data = await response.json();
+                
+                if (!data.summary) {
+                    return '<div class="info">No simulation summary data available for charts.</div>';
+                }
+                
+                // Generate unique IDs for the charts
+                const successChartId = `successChart_${sceneName}_${runNumber}`;
+                const volumeChartId = `volumeChart_${sceneName}_${runNumber}`;
+                const savingsChartId = `savingsChart_${sceneName}_${runNumber}`;
+                const successRateChartId = `successRateChart_${sceneName}_${runNumber}`;
+                const overallSuccessRateChartId = `overallSuccessRateChart_${sceneName}_${runNumber}`;
+                const avgCostSavedChartId = `avgCostSavedChart_${sceneName}_${runNumber}`;
+                
+                let html = `
+                    <div class="analysis-section">
+                        <h4>📈 Simulation Results Analysis</h4>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            <div>
+                                <h5>Success Rate Summary</h5>
+                                <div style="position: relative; height: 300px;">
+                                    <canvas id="${successChartId}"></canvas>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5>Transaction Volume Summary</h5>
+                                <div style="position: relative; height: 300px;">
+                                    <canvas id="${volumeChartId}"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            <div>
+                                <h5>💰 Cost Savings by Processor Over Time</h5>
+                                <div style="position: relative; height: 400px;">
+                                    <canvas id="${savingsChartId}"></canvas>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5>📈 Average Success Rate by Processor Over Time</h5>
+                                <div style="position: relative; height: 400px;">
+                                    <canvas id="${successRateChartId}"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            <div>
+                                <h5>📊 Cumulative Overall Success Rate Over Time</h5>
+                                <div style="position: relative; height: 400px;">
+                                    <canvas id="${overallSuccessRateChartId}"></canvas>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5>💵 Cumulative Total Cost Saved Over Time</h5>
+                                <div style="position: relative; height: 400px;">
+                                    <canvas id="${avgCostSavedChartId}"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="info">
+                            <strong>Note:</strong> These charts show summary data from the simulation. 
+                            For detailed time-series analysis, the actual output_results.csv would need to be processed.
+                            <br><br>
+                            <strong>Summary Statistics:</strong><br>
+                            • Total Transactions: ${data.summary.total_transactions}<br>
+                        </div>
+                    </div>
+                `;
+                
+                // Use setTimeout to ensure the DOM is updated before creating charts
+                setTimeout(() => {
+                    createSummaryCharts(data.summary, successChartId, volumeChartId, sceneName, runNumber);
+                }, 100);
+                
+                return html;
+                
+            } catch (error) {
+                console.error('Error generating simulation charts:', error);
+                return '<div class="error">Failed to load simulation results data.</div>';
+            }
+        }
+        
+        // Function to create summary charts from simulation data
+        async function createSummaryCharts(summary, successChartId, volumeChartId, sceneName, runNumber) {
+            console.log('Creating summary charts with data:', summary);
+            
+            try {
+                // Fetch the actual simulation CSV data to create real processor-wise charts
+                const response = await fetch(`/api/simulation-csv/${sceneName}/${runNumber}`);
+                if (!response.ok) {
+                    console.warn('Could not fetch simulation CSV data, using summary data only');
+                    createSummaryChartsFromSummary(summary, successChartId, volumeChartId);
+                    return;
+                }
+                
+                const csvContent = await response.text();
+                
+                // Parse the CSV data
+                Papa.parse(csvContent, {
+                    header: true,
+                    complete: (results) => {
+                        const transactions = results.data.filter(row => row.paymentId && row.chosen_processor);
+                        
+                        if (transactions.length === 0) {
+                            console.warn('No transaction data found in CSV, using summary data');
+                            createSummaryChartsFromSummary(summary, successChartId, volumeChartId);
+                            return;
+                        }
+                        
+                        createRealProcessorCharts(transactions, successChartId, volumeChartId);
+                    },
+                    error: (error) => {
+                        console.error('Error parsing simulation CSV:', error);
+                        createSummaryChartsFromSummary(summary, successChartId, volumeChartId);
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error fetching simulation data:', error);
+                createSummaryChartsFromSummary(summary, successChartId, volumeChartId);
+            }
+        }
+        
+        // Function to create charts from actual transaction data
+        function createRealProcessorCharts(transactions, successChartId, volumeChartId) {
+            console.log('Creating charts from real transaction data:', transactions.length, 'transactions');
+            
+            // Get TPS setting from the main page
+            const tps = parseInt(document.getElementById('tpsInput')?.value || 10);
+            const timeWindow = parseInt(document.getElementById('timeWindow')?.value || 10);
+            const windowSize = tps * timeWindow;
+            const numWindows = Math.ceil(transactions.length / windowSize);
+            
+            // Get unique processors from actual data
+            const processors = [...new Set(transactions.map(t => t.chosen_processor).filter(p => p))];
+            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+            
+            console.log('Found processors:', processors);
+            
+            // Create Success Rate Chart (Processor-wise over time)
+            const successCtx = document.getElementById(successChartId);
+            if (successCtx) {
+                const successDatasets = processors.map((processor, index) => {
+                    const data = [];
+                    
+                    for (let windowIndex = 0; windowIndex < numWindows; windowIndex++) {
+                        const startIndex = windowIndex * windowSize;
+                        const endIndex = Math.min(startIndex + windowSize, transactions.length);
+                        const windowTransactions = transactions.slice(startIndex, endIndex);
+                        
+                        // Filter transactions for this processor
+                        const processorTransactions = windowTransactions.filter(t => t.chosen_processor === processor);
+                        
+                        if (processorTransactions.length > 0) {
+                            const successCount = processorTransactions.filter(t => t.final_outcome === 'success').length;
+                            const successRate = (successCount / processorTransactions.length) * 100;
+                            const timePoint = windowIndex * timeWindow;
+                            
+                            data.push({
+                                x: timePoint,
+                                y: successRate
+                            });
+                        }
+                    }
+                    
+                    return {
+                        label: processor,
+                        data: data,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    };
+                });
+                
+                new Chart(successCtx.getContext('2d'), {
+                    type: 'line',
+                    data: { datasets: successDatasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Processor-wise Success Rate Over Time',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Success Rate (%)',
+                                    font: { size: 12 }
+                                },
+                                min: 0,
+                                max: 100,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+            
+            // Create Volume Distribution Chart (Processor-wise transaction count over time)
+            const volumeCtx = document.getElementById(volumeChartId);
+            if (volumeCtx) {
+                const volumeDatasets = processors.map((processor, index) => {
+                    const data = [];
+                    
+                    for (let windowIndex = 0; windowIndex < numWindows; windowIndex++) {
+                        const startIndex = windowIndex * windowSize;
+                        const endIndex = Math.min(startIndex + windowSize, transactions.length);
+                        const windowTransactions = transactions.slice(startIndex, endIndex);
+                        
+                        // Count transactions for this processor
+                        const processorCount = windowTransactions.filter(t => t.chosen_processor === processor).length;
+                        const timePoint = windowIndex * timeWindow;
+                        
+                        data.push({
+                            x: timePoint,
+                            y: processorCount
+                        });
+                    }
+                    
+                    return {
+                        label: processor,
+                        data: data,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    };
+                });
+                
+                new Chart(volumeCtx.getContext('2d'), {
+                    type: 'line',
+                    data: { datasets: volumeDatasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Processor-wise Transaction Volume Over Time',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Transaction Count',
+                                    font: { size: 12 }
+                                },
+                                beginAtZero: true,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+            
+            // Create Cost Savings Chart (Processor-wise savings over time)
+            const savingsChartId = successChartId.replace('successChart', 'savingsChart');
+            const savingsCtx = document.getElementById(savingsChartId);
+            if (savingsCtx) {
+                const savingsDatasets = processors.map((processor, index) => {
+                    const data = [];
+                    
+                    for (let windowIndex = 0; windowIndex < numWindows; windowIndex++) {
+                        const startIndex = windowIndex * windowSize;
+                        const endIndex = Math.min(startIndex + windowSize, transactions.length);
+                        const windowTransactions = transactions.slice(startIndex, endIndex);
+                        
+                        // Filter transactions for this processor and calculate total savings
+                        const processorTransactions = windowTransactions.filter(t => t.chosen_processor === processor);
+                        
+                        if (processorTransactions.length > 0) {
+                            const totalSavings = processorTransactions.reduce((sum, t) => {
+                                const savings = parseFloat(t.savings) || 0;
+                                return sum + savings;
+                            }, 0);
+                            const timePoint = windowIndex * timeWindow;
+                            
+                            data.push({
+                                x: timePoint,
+                                y: totalSavings
+                            });
+                        }
+                    }
+                    
+                    return {
+                        label: processor,
+                        data: data,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    };
+                });
+                
+                new Chart(savingsCtx.getContext('2d'), {
+                    type: 'line',
+                    data: { datasets: savingsDatasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Cost Savings by Processor Over Time',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Cost Savings ($)',
+                                    font: { size: 12 }
+                                },
+                                beginAtZero: true,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+            
+            // Create Average Success Rate by Processor Chart (Cumulative average over time)
+            const successRateChartId = successChartId.replace('successChart', 'successRateChart');
+            const successRateCtx = document.getElementById(successRateChartId);
+            if (successRateCtx) {
+                // Get unique processors from the chosen_processor column
+                const uniqueProcessors = [...new Set(transactions.map(t => t.chosen_processor).filter(p => p))];
+                
+                const successRateDatasets = uniqueProcessors.map((processor, index) => {
+                    const data = [];
+                    let totalSuccessSoFar = 0;
+                    let totalTxnsSoFar = 0;
+                    
+                    for (let windowIndex = 0; windowIndex < numWindows; windowIndex++) {
+                        const startIndex = windowIndex * windowSize;
+                        const endIndex = Math.min(startIndex + windowSize, transactions.length);
+                        const windowTransactions = transactions.slice(startIndex, endIndex);
+                        
+                        // Filter transactions for this processor in current window
+                        const processorTransactions = windowTransactions.filter(t => t.chosen_processor === processor);
+                        
+                        if (processorTransactions.length > 0) {
+                            // Add current window's transactions to cumulative totals
+                            const successCount = processorTransactions.filter(t => t.final_outcome === 'success').length;
+                            totalSuccessSoFar += successCount;
+                            totalTxnsSoFar += processorTransactions.length;
+                        }
+                        
+                        // Calculate cumulative average success rate: (total_success_so_far / total_txns_so_far)
+                        const cumulativeSuccessRate = totalTxnsSoFar > 0 ? (totalSuccessSoFar / totalTxnsSoFar) * 100 : 0;
+                        
+                        const timePoint = windowIndex * timeWindow;
+                        
+                        data.push({
+                            x: timePoint,
+                            y: cumulativeSuccessRate
+                        });
+                    }
+                    
+                    return {
+                        label: processor,
+                        data: data,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    };
+                });
+                
+                new Chart(successRateCtx.getContext('2d'), {
+                    type: 'line',
+                    data: { datasets: successRateDatasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Average Success Rate by Processor Over Time',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Average Success Rate (%)',
+                                    font: { size: 12 }
+                                },
+                                min: 0,
+                                max: 100,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+            
+            // Create Cumulative Overall Success Rate Chart (using final_outcome column)
+            const overallSuccessRateChartId = successChartId.replace('successChart', 'overallSuccessRateChart');
+            const overallSuccessRateCtx = document.getElementById(overallSuccessRateChartId);
+            if (overallSuccessRateCtx) {
+                const data = [];
+                let totalSuccessSoFar = 0;
+                let totalTxnsSoFar = 0;
+                
+                for (let windowIndex = 0; windowIndex < numWindows; windowIndex++) {
+                    const startIndex = windowIndex * windowSize;
+                    const endIndex = Math.min(startIndex + windowSize, transactions.length);
+                    const windowTransactions = transactions.slice(startIndex, endIndex);
+                    
+                    // Add current window's transactions to cumulative totals
+                    const successCount = windowTransactions.filter(t => t.final_outcome === 'success').length;
+                    totalSuccessSoFar += successCount;
+                    totalTxnsSoFar += windowTransactions.length;
+                    
+                    // Calculate cumulative overall success rate
+                    const cumulativeSuccessRate = totalTxnsSoFar > 0 ? (totalSuccessSoFar / totalTxnsSoFar) * 100 : 0;
+                    const timePoint = windowIndex * timeWindow;
+                    
+                    data.push({
+                        x: timePoint,
+                        y: cumulativeSuccessRate
+                    });
+                }
+                
+                new Chart(overallSuccessRateCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Overall Success Rate',
+                            data: data,
+                            borderColor: '#28a745',
+                            backgroundColor: '#28a74520',
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Cumulative Overall Success Rate Over Time',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Success Rate (%)',
+                                    font: { size: 12 }
+                                },
+                                min: 0,
+                                max: 100,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+            
+            // Create Cumulative Total Cost Saved Chart (using savings column)
+            const avgCostSavedChartId = successChartId.replace('successChart', 'avgCostSavedChart');
+            const avgCostSavedCtx = document.getElementById(avgCostSavedChartId);
+            if (avgCostSavedCtx) {
+                const data = [];
+                
+                for (let windowIndex = 0; windowIndex < numWindows; windowIndex++) {
+                    const startIndex = 0; // Always start from the beginning
+                    const endIndex = Math.min((windowIndex + 1) * windowSize, transactions.length);
+                    const cumulativeTransactions = transactions.slice(startIndex, endIndex);
+                    
+                    // Calculate total savings from the beginning up to current window
+                    const totalSavingsSoFar = cumulativeTransactions.reduce((sum, t) => {
+                        const savings = parseFloat(t.savings) || 0;
+                        return sum + savings;
+                    }, 0);
+                    
+                    const timePoint = windowIndex * timeWindow;
+                    
+                    data.push({
+                        x: timePoint,
+                        y: totalSavingsSoFar
+                    });
+                }
+                
+                new Chart(avgCostSavedCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Total Cost Saved',
+                            data: data,
+                            borderColor: '#ffc107',
+                            backgroundColor: '#ffc10720',
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Cumulative Total Cost Saved Over Time',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Total Cost Saved ($)',
+                                    font: { size: 12 }
+                                },
+                                beginAtZero: true,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Fallback function to create charts from summary data only
+        function createSummaryChartsFromSummary(summary, successChartId, volumeChartId) {
+            console.log('Creating fallback line charts from summary data');
+            
+            // Get TPS setting from the main page
+            const tps = parseInt(document.getElementById('tpsInput')?.value || 10);
+            const timeWindow = parseInt(document.getElementById('timeWindow')?.value || 10);
+            
+            // Create mock processor-wise line charts even when CSV data is not available
+            const mockProcessors = ['Stripe', 'Adyen'];
+            const colors = ['#FF6384', '#36A2EB'];
+            const totalTransactions = summary.total_transactions || 100;
+            const windowSize = tps * timeWindow;
+            const numWindows = Math.ceil(totalTransactions / windowSize);
+            
+            // Create Success Rate Chart (line chart with mock processor data)
+            const successCtx = document.getElementById(successChartId);
+            if (successCtx) {
+                const successDatasets = mockProcessors.map((processor, index) => {
+                    const data = [];
+                    const baseRate = (summary.success_rate || 50);
+                    
+                    for (let i = 0; i < numWindows; i++) {
+                        const timePoint = i * timeWindow;
+                        // Create mock variation around the base success rate
+                        const variation = (Math.random() - 0.5) * 20;
+                        const successRate = Math.max(0, Math.min(100, baseRate + variation));
+                        data.push({
+                            x: timePoint,
+                            y: successRate
+                        });
+                    }
+                    
+                    return {
+                        label: processor,
+                        data: data,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    };
+                });
+                
+                new Chart(successCtx.getContext('2d'), {
+                    type: 'line',
+                    data: { datasets: successDatasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Processor-wise Success Rate Over Time (Estimated)',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Success Rate (%)',
+                                    font: { size: 12 }
+                                },
+                                min: 0,
+                                max: 100,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+            
+            // Create Volume Distribution Chart (line chart with mock processor data)
+            const volumeCtx = document.getElementById(volumeChartId);
+            if (volumeCtx) {
+                const volumeDatasets = mockProcessors.map((processor, index) => {
+                    const data = [];
+                    const avgTransactionsPerProcessor = Math.floor(totalTransactions / mockProcessors.length);
+                    
+                    for (let i = 0; i < numWindows; i++) {
+                        const timePoint = i * timeWindow;
+                        const baseCount = Math.floor(avgTransactionsPerProcessor / numWindows);
+                        const variation = Math.floor(Math.random() * baseCount * 0.3);
+                        const count = Math.max(0, baseCount + variation);
+                        data.push({
+                            x: timePoint,
+                            y: count
+                        });
+                    }
+                    
+                    return {
+                        label: processor,
+                        data: data,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    };
+                });
+                
+                new Chart(volumeCtx.getContext('2d'), {
+                    type: 'line',
+                    data: { datasets: volumeDatasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Processor-wise Transaction Volume Over Time (Estimated)',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)',
+                                    font: { size: 12 }
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Transaction Count',
+                                    font: { size: 12 }
+                                },
+                                beginAtZero: true,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Function to create the actual charts
+        function createSimulationCharts(transactions, successChartId, volumeChartId) {
+            // Group transactions into time windows (every 20 transactions = 1 time unit)
+            const windowSize = 20;
+            const timeWindows = [];
+            
+            for (let i = 0; i < transactions.length; i += windowSize) {
+                const windowTransactions = transactions.slice(i, i + windowSize);
+                const timePoint = Math.floor(i / windowSize);
+                
+                // Calculate success rate for this window
+                const successCount = windowTransactions.filter(t => t.final_outcome === 'success').length;
+                const successRate = (successCount / windowTransactions.length) * 100;
+                
+                // Calculate processor distribution for this window
+                const processorCounts = {};
+                windowTransactions.forEach(t => {
+                    const processor = t.chosen_processor || 'Unknown';
+                    processorCounts[processor] = (processorCounts[processor] || 0) + 1;
+                });
+                
+                timeWindows.push({
+                    time: timePoint,
+                    successRate: successRate,
+                    processorCounts: processorCounts,
+                    totalTransactions: windowTransactions.length
+                });
+            }
+            
+            // Create Success Rate Chart
+            const successCtx = document.getElementById(successChartId);
+            if (successCtx) {
+                new Chart(successCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Actual Success Rate',
+                            data: timeWindows.map(w => ({ x: w.time, y: w.successRate })),
+                            borderColor: '#28a745',
+                            backgroundColor: '#28a74520',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Actual Success Rate Over Time',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time Window',
+                                    font: { size: 12 }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Success Rate (%)',
+                                    font: { size: 12 }
+                                },
+                                min: 0,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Create Volume Distribution Chart
+            const volumeCtx = document.getElementById(volumeChartId);
+            if (volumeCtx) {
+                // Get all unique processors
+                const allProcessors = [...new Set(transactions.map(t => t.chosen_processor).filter(p => p))];
+                const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+                
+                const datasets = allProcessors.map((processor, index) => ({
+                    label: processor,
+                    data: timeWindows.map(w => ({
+                        x: w.time,
+                        y: ((w.processorCounts[processor] || 0) / w.totalTransactions) * 100
+                    })),
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                }));
+                
+                new Chart(volumeCtx.getContext('2d'), {
+                    type: 'line',
+                    data: { datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Volume Distribution Between Processors',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Time Window',
+                                    font: { size: 12 }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Volume (%)',
+                                    font: { size: 12 }
+                                },
+                                min: 0,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        function closePerformanceModal() {
+            document.getElementById('performanceModal').style.display = 'none';
+        }
+        
+        // Close modal when clicking outside
+        document.addEventListener('click', function(event) {
+            const modal = document.getElementById('performanceModal');
+            if (event.target === modal) {
+                closePerformanceModal();
+            }
+        });
+    </script>
+</body>
+</html>
